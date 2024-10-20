@@ -5,7 +5,7 @@
 #include <time.h>
 #include <string.h>
 
-FILE *logFile;
+FILE *logFile;          
 
 void CustomTraceLog(int logType, const char *text, va_list args)
 {
