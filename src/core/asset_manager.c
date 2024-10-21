@@ -8,53 +8,59 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "asset_manager.h"
 
-#define TRANSPARENCY_THRESHOLD 0.99f
-#define MAX_TRANSPARENT_PIXELS 0.9f
+// Function to initialize the tile map
+TileMap *InitTileMap(int mapWidth, int mapHeight) {
+    TileMap *tileMap = (TileMap *)malloc(sizeof(TileMap));
+    
+    tileMap->chunkRows = mapHeight / CHUNK_SIZE;
+    tileMap->chunkCols = mapWidth / CHUNK_SIZE;
 
-#define MAX_ANIMATIONS 1000
-#define MAX_SPRITES 1000
-#define ASSET_PATH "../assets/" // Adjust to your asset directory
+    // Allocate memory for chunks (array of pointers to chunks)
+    tileMap->chunks = (Chunk **)malloc(tileMap->chunkRows * sizeof(Chunk *));
+    for (int row = 0; row < tileMap->chunkRows; row++) {
+        tileMap->chunks[row] = (Chunk *)malloc(tileMap->chunkCols * sizeof(Chunk));
+        
+        // Initialize each chunk
+        for (int col = 0; col < tileMap->chunkCols; col++) {
+            // Initialize each tile in the chunk
+            for (int y = 0; y < CHUNK_SIZE; y++) {
+                for (int x = 0; x < CHUNK_SIZE; x++) {
+                    tileMap->chunks[row][col].tiles[y][x].type = 0; // Example: default tile type
+                    tileMap->chunks[row][col].tiles[y][x].isWalkable = true;
+                }
+            }
+            tileMap->chunks[row][col].position = (Vector2){ col * CHUNK_SIZE, row * CHUNK_SIZE };
+        }
+    }
 
-typedef struct Animation
-{
-    Texture2D texture;
-    int frameCount;
-    int currentFrame;
-    float frameTime;
-    float elapsedTime;
-    Rectangle *frames; // Array of rectangles for each frame
-    int frameWidth;    // Frame width parsed from filename
-    int frameHeight;   // Frame height parsed from filename
-    int rows;          // Rows parsed from filename
-    int framesPerRow;  // Frames per row parsed from filename
-    char name[64];     // Sprite name extracted from the filename
-    bool drawName;     // Flag to determine if the name should be drawn
-} Animation;
+    return tileMap;
+}
 
-typedef struct Sprite
-{
-    Texture2D texture;
-    char name[64]; // Sprite name extracted from the filename
-    bool drawName; // Flag to determine if the name should be drawn
-} Sprite;
+// Function to get a tile at a specific position
+Tile *GetTile(TileMap *tileMap, int x, int y) {
+    int chunkX = x / CHUNK_SIZE;
+    int chunkY = y / CHUNK_SIZE;
 
-typedef struct AssetManager
-{
-    Animation animations[MAX_ANIMATIONS];
-    Sprite sprites[MAX_SPRITES];
-    int spriteCount;
-    int animationCount;
-} AssetManager;
+    int tileX = x % CHUNK_SIZE;
+    int tileY = y % CHUNK_SIZE;
 
-// Function prototypes
-void InitAssetManager(AssetManager *manager);
-void LoadAssetsFromDirectory(AssetManager *manager, const char *directory);
-void LoadSprite(AssetManager *manager, const char *filePath);
-void LoadAnimation(AssetManager *manager, const char *filePath);
-void UpdateAnimations(AssetManager *manager, float deltaTime);
-void UnloadAssets(AssetManager *manager);
+    if (chunkX >= 0 && chunkX < tileMap->chunkCols && chunkY >= 0 && chunkY < tileMap->chunkRows) {
+        return &tileMap->chunks[chunkY][chunkX].tiles[tileY][tileX];
+    }
 
+    return NULL; // Return NULL if the tile is out of bounds
+}
+
+// Function to free the tile map memory
+void FreeTileMap(TileMap *tileMap) {
+    for (int row = 0; row < tileMap->chunkRows; row++) {
+        free(tileMap->chunks[row]);
+    }
+    free(tileMap->chunks);
+    free(tileMap);
+}   
 
 // Function to parse the filename and extract animation data
 // Modified function to parse filename and extract name, rows, framesPerRow, frameWidth, frameHeight

@@ -5,7 +5,7 @@
 #include <time.h>
 #include <string.h>
 
-FILE *logFile;          
+FILE *logFile;
 
 void CustomTraceLog(int logType, const char *text, va_list args)
 {
@@ -30,7 +30,7 @@ int main(void)
         CloseWindow();
     }
     SetTraceLogCallback(CustomTraceLog);
-    SetConfigFlags(FLAG_BORDERLESS_WINDOWED_MODE | FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_HIGHDPI);
+    SetConfigFlags(FLAG_BORDERLESS_WINDOWED_MODE | FLAG_WINDOW_RESIZABLE);
     InitWindow(GetScreenWidth(), GetScreenHeight(), "Change My Name");
     SetExitKey(KEY_DELETE);
     InitSceneManager();

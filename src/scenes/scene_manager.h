@@ -5,6 +5,7 @@
 typedef enum {
     SCENE_MAIN_MENU,
     SCENE_GAMEPLAY,
+    SCENE_MAP,
     SCENE_PAUSE_MENU,
     SCENE_GAME_OVER,
     SCENE_OPTIONS,
@@ -12,6 +13,7 @@ typedef enum {
     SCENE_TEST,
     SCENE_RAYLIB_LOGO,
     SCENE_NETWORKING,
+    SCENE_TILE_PLACEMENT, // Added tile placement scene
     // Add more scenes as needed
 } GameScene;
 

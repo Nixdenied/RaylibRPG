@@ -1,5 +1,4 @@
-#ifndef ASSET_MANAGER_H
-#define ASSET_MANAGER_H
+#pragma once
 
 #include "raylib.h"
 #include <stdlib.h>
@@ -11,6 +10,7 @@
 
 #define TRANSPARENCY_THRESHOLD 0.99f
 #define MAX_TRANSPARENT_PIXELS 0.9f
+#define CHUNK_SIZE 64
 
 #define MAX_ANIMATIONS 1000
 #define MAX_SPRITES 1000
@@ -47,6 +47,28 @@ typedef struct AssetManager
     int animationCount;
 } AssetManager;
 
+// Define a Tile struct that can hold tile data (adjust fields as needed)
+typedef struct Tile {
+    int type;        // Tile type or ID (you can change this to anything else)
+    bool isWalkable; // Whether the tile can be walked on or not
+    Texture2D texture; // The texture of the tile
+} Tile;
+
+// Define a Chunk struct, which contains a 64x64 grid of tiles
+typedef struct Chunk {
+    Tile tiles[CHUNK_SIZE][CHUNK_SIZE]; // 64x64 grid of tiles
+    Vector2 position; // Position of the chunk in the world
+} Chunk;
+
+// Define a TileMap struct to manage multiple chunks
+typedef struct TileMap {
+    Chunk **chunks; // 2D array of pointers to chunks (dynamically allocated)
+    int chunkRows;  // Number of chunk rows
+    int chunkCols;  // Number of chunk columns
+} TileMap;
+
+extern AssetManager manager;
+
 // Function prototypes
 void InitAssetManager(AssetManager *manager);
 void LoadAssetsFromDirectory(AssetManager *manager, const char *directory);
@@ -56,5 +78,3 @@ void UpdateAnimations(AssetManager *manager, float deltaTime);
 void UnloadAssets(AssetManager *manager);
 bool IsFrameBlank(Texture2D texture, Rectangle frame);
 void ParseAnimationInfoFromFilename(const char *filePath, char *name, int *rows, int *framesPerRow, int *frameWidth, int *frameHeight);
-
-#endif // ASSET_MANAGER_H
