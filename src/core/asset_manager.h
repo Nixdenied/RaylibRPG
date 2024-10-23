@@ -7,6 +7,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <stdbool.h>
+#include "tilemap.h"
 
 #define TRANSPARENCY_THRESHOLD 0.99f
 #define MAX_TRANSPARENT_PIXELS 0.9f
@@ -14,7 +15,10 @@
 
 #define MAX_ANIMATIONS 1000
 #define MAX_SPRITES 1000
+#define MAX_TILEMAPS 1000
 #define ASSET_PATH "../assets/" // Adjust to your asset directory
+
+#define HASH_TABLE_SIZE 1024 // Adjust as needed
 
 typedef struct Animation
 {
@@ -39,33 +43,25 @@ typedef struct Sprite
     bool drawName; // Flag to determine if the name should be drawn
 } Sprite;
 
-typedef struct AssetManager
-{
-    Animation animations[MAX_ANIMATIONS];
-    Sprite sprites[MAX_SPRITES];
+typedef struct AssetNode {
+    char name[64];        // Asset name (key)
+    union {
+        Sprite sprite;    // Store either a sprite or animation
+        Animation animation;
+        Tilemap tilemap;
+    };
+    struct AssetNode *next; // Linked list to handle hash collisions
+} AssetNode;
+
+typedef struct AssetManager {
+    AssetNode *hashTable[HASH_TABLE_SIZE]; // Hashmap to store assets
     int spriteCount;
     int animationCount;
+    int tilemapCount;
+    Sprite sprites[MAX_SPRITES];
+    Animation animations[MAX_ANIMATIONS];
+    Tilemap tilemap[MAX_TILEMAPS];
 } AssetManager;
-
-// Define a Tile struct that can hold tile data (adjust fields as needed)
-typedef struct Tile {
-    int type;        // Tile type or ID (you can change this to anything else)
-    bool isWalkable; // Whether the tile can be walked on or not
-    Texture2D texture; // The texture of the tile
-} Tile;
-
-// Define a Chunk struct, which contains a 64x64 grid of tiles
-typedef struct Chunk {
-    Tile tiles[CHUNK_SIZE][CHUNK_SIZE]; // 64x64 grid of tiles
-    Vector2 position; // Position of the chunk in the world
-} Chunk;
-
-// Define a TileMap struct to manage multiple chunks
-typedef struct TileMap {
-    Chunk **chunks; // 2D array of pointers to chunks (dynamically allocated)
-    int chunkRows;  // Number of chunk rows
-    int chunkCols;  // Number of chunk columns
-} TileMap;
 
 extern AssetManager manager;
 
@@ -78,3 +74,9 @@ void UpdateAnimations(AssetManager *manager, float deltaTime);
 void UnloadAssets(AssetManager *manager);
 bool IsFrameBlank(Texture2D texture, Rectangle frame);
 void ParseAnimationInfoFromFilename(const char *filePath, char *name, int *rows, int *framesPerRow, int *frameWidth, int *frameHeight);
+void AddAssetToHashTable(AssetManager *manager, const char *name, Sprite sprite);
+unsigned long HashString(const char *str);
+void AddAnimationToHashTable(AssetManager *manager, const char *name, Animation animation);
+Sprite GetSprite(AssetManager *manager, const char *name);
+Animation GetAnimation(AssetManager *manager, const char *name);
+Tilemap GetTilemap(AssetManager *manager, const char *name);       

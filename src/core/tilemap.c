@@ -1,61 +1,68 @@
-#include "tilemap.h"
 #include <stdlib.h>
-
-Tilemap tilemap;
+#include "tilemap.h"
+#include "asset_manager.h"
+#include <math.h>
 
 // Load the tilemap from a file and cut it into tiles
-Tilemap LoadTilemap(const char *filePath, int tileSize)
-{
-
+void LoadTilemap(const char *filePath, int tileSize) {
     // Load the tilemap texture as an image
     Texture2D tilemapTexture = LoadTexture(filePath);
     Image tilemapImage = LoadImageFromTexture(tilemapTexture);
 
     // Calculate tile count based on image size and tile size
-    tilemap.tileCountX = tilemapImage.width / tileSize;
-    tilemap.tileCountY = tilemapImage.height / tileSize;
-    tilemap.totalTiles = tilemap.tileCountX * tilemap.tileCountY;
-    tilemap.currentTileIndex = 0;
+    int tileCountX = tilemapImage.width / tileSize;
+    int tileCountY = tilemapImage.height / tileSize;
+    int totalTiles = tileCountX * tileCountY;
 
     // Allocate memory for the tiles array
-    tilemap.tiles = (Texture2D *)malloc(tilemap.totalTiles * sizeof(Texture2D));
+    Texture2D *tiles = (Texture2D *)malloc(totalTiles * sizeof(Texture2D));
 
-    // Cut the tilemap into tiles
-    for (int y = 0; y < tilemap.tileCountY; y++)
-    {
-        for (int x = 0; x < tilemap.tileCountX; x++)
-        {
-            // Ensure srcRect does not exceed the bounds of the image
-            Rectangle srcRect = {x * tileSize, y * tileSize, tileSize, tileSize};
+    // Cut the tilemap into tiles and store them in the asset manager
+    for (int y = 0; y < tileCountY; y++) {
+        for (int x = 0; x < tileCountX; x++) {
+            Rectangle srcRect = { x * tileSize, y * tileSize, tileSize, tileSize };
 
-            // Check if we can crop this tile (within bounds)
             if (srcRect.x + srcRect.width <= tilemapImage.width &&
-                srcRect.y + srcRect.height <= tilemapImage.height)
-            {
-                Image tileImage = ImageCopy(tilemapImage); // Make a copy of the original image
-                ImageCrop(&tileImage, srcRect);            // Crop the image to the tile
+                srcRect.y + srcRect.height <= tilemapImage.height) {
+                
+                Image tileImage = ImageCopy(tilemapImage);
+                ImageCrop(&tileImage, srcRect);
 
-                // Load the cropped image as a texture
-                tilemap.tiles[y * tilemap.tileCountX + x] = LoadTextureFromImage(tileImage);
+                Texture2D tileTexture = LoadTextureFromImage(tileImage);
+                if (tileTexture.id != 0) {
+                    tiles[y * tileCountX + x] = tileTexture; // Store the texture
 
-                // Check if the texture was loaded successfully
-                if (tilemap.tiles[y * tilemap.tileCountX + x].id == 0)
-                {
-                    // Handle texture loading failure (optional logging)
+                    // Create a unique name for this tile (e.g., "tile_X_Y")
+                    char tileName[64];
+                    snprintf(tileName, sizeof(tileName), "tile_%d_%d", x, y);
+
+                    // Add the tile to the asset manager
+                    Sprite tileSprite = { .texture = tileTexture };
+
                 }
 
-                // Unload the cropped image
                 UnloadImage(tileImage);
             }
         }
     }
 
-    // Unload the original tilemap image
+    // Prepare the new tilemap to store in the asset manager
+    Tilemap newTilemap;
+    newTilemap.tiles = tiles; // Assign the allocated tiles array
+    newTilemap.tileCountX = tileCountX;
+    newTilemap.tileCountY = tileCountY;
+    newTilemap.totalTiles = totalTiles;
+    newTilemap.currentTileIndex = 0;
+
+    // Add the tilemap to the asset manager
+    manager.tilemap[manager.tilemapCount++] = newTilemap; // Increment tilemapCount after assignment
+
+
+    // Clean up
     UnloadImage(tilemapImage);
     UnloadTexture(tilemapTexture);
-
-    return tilemap;
 }
+
 
 // Update the tilemap (e.g., switch between tiles with arrow keys)
 void UpdateTilemap(Tilemap *tilemap)
@@ -79,11 +86,11 @@ void UpdateTilemap(Tilemap *tilemap)
 }
 
 // Unload all textures in the tilemap and free memory
-void UnloadTilemap(Tilemap *tilemap)
+void UnloadTilemap()
 {
-    for (int i = 0; i < tilemap->totalTiles; i++)
+    for (int i = 0; i < manager.tilemap->totalTiles; i++)
     {
-        UnloadTexture(tilemap->tiles[i]);
+        UnloadTexture(manager.tilemap->tiles[i]);
     }
-    free(tilemap->tiles);
+    free(manager.tilemap->tiles);
 }

@@ -8,59 +8,89 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "tilemap.h"
 #include "asset_manager.h"
 
-// Function to initialize the tile map
-TileMap *InitTileMap(int mapWidth, int mapHeight) {
-    TileMap *tileMap = (TileMap *)malloc(sizeof(TileMap));
-    
-    tileMap->chunkRows = mapHeight / CHUNK_SIZE;
-    tileMap->chunkCols = mapWidth / CHUNK_SIZE;
+unsigned long HashString(const char *str)
+{
+    unsigned long hash = 5381;
+    int c;
+    while ((c = *str++))
+    {
+        hash = ((hash << 5) + hash) + c; // hash * 33 + c
+    }
+    return hash;
+}
 
-    // Allocate memory for chunks (array of pointers to chunks)
-    tileMap->chunks = (Chunk **)malloc(tileMap->chunkRows * sizeof(Chunk *));
-    for (int row = 0; row < tileMap->chunkRows; row++) {
-        tileMap->chunks[row] = (Chunk *)malloc(tileMap->chunkCols * sizeof(Chunk));
-        
-        // Initialize each chunk
-        for (int col = 0; col < tileMap->chunkCols; col++) {
-            // Initialize each tile in the chunk
-            for (int y = 0; y < CHUNK_SIZE; y++) {
-                for (int x = 0; x < CHUNK_SIZE; x++) {
-                    tileMap->chunks[row][col].tiles[y][x].type = 0; // Example: default tile type
-                    tileMap->chunks[row][col].tiles[y][x].isWalkable = true;
-                }
-            }
-            tileMap->chunks[row][col].position = (Vector2){ col * CHUNK_SIZE, row * CHUNK_SIZE };
+void AddAssetToHashTable(AssetManager *manager, const char *name, Sprite sprite)
+{
+    unsigned long hash = HashString(name) % HASH_TABLE_SIZE;
+
+    AssetNode *newNode = (AssetNode *)malloc(sizeof(AssetNode));
+    strncpy(newNode->name, name, 64);
+    newNode->sprite = sprite; // Store the sprite directly
+    newNode->next = manager->hashTable[hash];
+    manager->hashTable[hash] = newNode;
+}
+
+void AddAnimationToHashTable(AssetManager *manager, const char *name, Animation animation)
+{
+    unsigned long hash = HashString(name) % HASH_TABLE_SIZE;
+
+    AssetNode *newNode = (AssetNode *)malloc(sizeof(AssetNode));
+    strncpy(newNode->name, name, 64);
+    newNode->animation = animation; // Store the animation directly
+    newNode->next = manager->hashTable[hash];
+    manager->hashTable[hash] = newNode;
+}
+
+Sprite GetSprite(AssetManager *manager, const char *name)
+{
+    unsigned long hash = HashString(name) % HASH_TABLE_SIZE;
+    AssetNode *node = manager->hashTable[hash];
+
+    while (node)
+    {
+        if (strcmp(node->name, name) == 0)
+        {
+            return node->sprite; // Return the sprite struct directly
         }
+        node = node->next;
     }
-
-    return tileMap;
+    return (Sprite){0}; // Return a default sprite if not found
 }
 
-// Function to get a tile at a specific position
-Tile *GetTile(TileMap *tileMap, int x, int y) {
-    int chunkX = x / CHUNK_SIZE;
-    int chunkY = y / CHUNK_SIZE;
+Animation GetAnimation(AssetManager *manager, const char *name)
+{
+    unsigned long hash = HashString(name) % HASH_TABLE_SIZE;
+    AssetNode *node = manager->hashTable[hash];
 
-    int tileX = x % CHUNK_SIZE;
-    int tileY = y % CHUNK_SIZE;
-
-    if (chunkX >= 0 && chunkX < tileMap->chunkCols && chunkY >= 0 && chunkY < tileMap->chunkRows) {
-        return &tileMap->chunks[chunkY][chunkX].tiles[tileY][tileX];
+    while (node)
+    {
+        if (strcmp(node->name, name) == 0)
+        {
+            return node->animation; // Return the animation struct directly
+        }
+        node = node->next;
     }
-
-    return NULL; // Return NULL if the tile is out of bounds
+    return (Animation){0}; // Return a default animation if not found
 }
 
-// Function to free the tile map memory
-void FreeTileMap(TileMap *tileMap) {
-    for (int row = 0; row < tileMap->chunkRows; row++) {
-        free(tileMap->chunks[row]);
+Tilemap GetTilemap(AssetManager *manager, const char *name)
+{
+    unsigned long hash = HashString(name) % HASH_TABLE_SIZE;
+    AssetNode *node = manager->hashTable[hash];
+
+    while (node)
+    {
+        if (strcmp(node->name, name) == 0)
+        {
+            return node->tilemap; // Return the tilemap struct directly
+        }
+        node = node->next;
     }
-    free(tileMap->chunks);
-    free(tileMap);
-}   
+    return (Tilemap){0}; // Return a default tilemap if not found
+}
 
 // Function to parse the filename and extract animation data
 // Modified function to parse filename and extract name, rows, framesPerRow, frameWidth, frameHeight
@@ -118,6 +148,7 @@ void InitAssetManager(AssetManager *manager)
 {
     manager->spriteCount = 0;
     manager->animationCount = 0;
+    manager->tilemapCount = 0;
 }
 
 // Function to check if a frame is blank (more than 90% transparent pixels)
@@ -150,6 +181,29 @@ bool IsFrameBlank(Texture2D texture, Rectangle frame)
     // If more than MAX_TRANSPARENT_PIXELS percentage of pixels are transparent, return true (frame is blank)
     float transparentRatio = (float)transparentPixelCount / totalPixelCount;
     return (transparentRatio >= MAX_TRANSPARENT_PIXELS);
+}
+
+void LoadSprite(AssetManager *manager, const char *filePath)
+{
+    if (manager->spriteCount < MAX_SPRITES)
+    {
+        manager->sprites[manager->spriteCount].texture = LoadTexture(filePath);
+
+        // Extract the name from the filename
+        char name[64];
+        ParseAnimationInfoFromFilename(filePath, name, NULL, NULL, NULL, NULL); // We only need the name part here
+        strncpy(manager->sprites[manager->spriteCount].name, name, 64);
+        manager->sprites[manager->spriteCount].drawName = true; // Set this flag as needed
+
+        // Add the loaded sprite to the hash table for fast lookup
+        AddAssetToHashTable(manager, name, manager->sprites[manager->spriteCount]);
+
+        manager->spriteCount++;
+    }
+    else
+    {
+        printf("Max sprites loaded!\n");
+    }
 }
 
 void LoadAnimation(AssetManager *manager, const char *filePath)
@@ -191,9 +245,10 @@ void LoadAnimation(AssetManager *manager, const char *filePath)
                     frameWidth,
                     frameHeight};
             }
-
-            
         }
+
+        // Add the loaded animation to the hash table for fast lookup
+        AddAnimationToHashTable(manager, name, manager->animations[manager->animationCount]);
 
         manager->animations[manager->animationCount].currentFrame = 0;
         manager->animations[manager->animationCount].frameTime = 0.1f; // 100 ms
@@ -204,26 +259,6 @@ void LoadAnimation(AssetManager *manager, const char *filePath)
     else
     {
         printf("Max animations loaded!\n");
-    }
-}
-
-void LoadSprite(AssetManager *manager, const char *filePath)
-{
-    if (manager->spriteCount < MAX_SPRITES)
-    {
-        manager->sprites[manager->spriteCount].texture = LoadTexture(filePath);
-
-        // Extract the name from the filename
-        char name[64];
-        ParseAnimationInfoFromFilename(filePath, name, NULL, NULL, NULL, NULL); // We only need the name part here
-        strncpy(manager->sprites[manager->spriteCount].name, name, 64);
-        manager->sprites[manager->spriteCount].drawName = true; // Set this flag as needed
-
-        manager->spriteCount++;
-    }
-    else
-    {
-        printf("Max sprites loaded!\n");
     }
 }
 
@@ -256,7 +291,11 @@ void LoadAssetsFromDirectory(AssetManager *manager, const char *directory)
                     if (strstr(ent->d_name, ".png") != NULL)
                     {
                         // Determine if it's a static sprite or an animation based on filename pattern
-                        if (strstr(ent->d_name, "_") != NULL)
+                        if (strstr(ent->d_name, "Tilemap") != NULL)
+                        {
+                            LoadTilemap(filePath, 64);
+                        }
+                        else if (strstr(ent->d_name, "_") != NULL)
                         {
                             LoadAnimation(manager, filePath); // Animation files have underscores in their names
                         }

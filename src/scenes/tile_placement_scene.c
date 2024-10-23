@@ -1,134 +1,270 @@
 #include "tile_placement_scene.h"
 #include "tilemap.h"
+#include "asset_manager.h"
 #include <stdlib.h>
 
-static Vector2 mousePosition;     // Mouse position for tile placement
-static int selectedTileIndex = 0; // Currently selected tile index
-static const int tileSize = 64;   // Size of each tile
-static int **placedTiles;         // 2D array to store placed tiles
-static int screenTilesX;          // Number of tiles fitting horizontally
-static int screenTilesY;          // Number of tiles fitting vertically
+static Vector2 mousePosition;
+static int selectedTileIndex = 0;
+static int selectedSpriteIndex = 0;
+static int selectedTilemapIndex = 0;
+static const int tileSize = 64;
+static int screenTilesX;
+static int screenTilesY;
+
+typedef struct TileStack
+{
+    int *tiles;   // Array of tile indices
+    int count;    // Number of tiles in the stack
+    int capacity; // Capacity of the tile stack (for dynamic allocation)
+} TileStack;
+
+static TileStack **placedTiles;
 
 void InitTilePlacementScene()
 {
-    tilemap = LoadTilemap("/opt/git/RayLibRPG/assets/Tiny Swords (Update 010)/Terrain/Ground/TilemapFlat.png", tileSize);
+    InitAssetManager(&manager);
+    LoadAssetsFromDirectory(&manager, ASSET_PATH);
 
-    // Get screen dimensions
+    // Log tile information
+    if (manager.tilemap && manager.tilemap->tiles)
+    {
+        for (int i = 0; i < manager.tilemapCount; i++)
+        {
+            int totalTiles = manager.tilemap[i].totalTiles;
+            if (totalTiles > 0)
+            {
+                printf("Loaded %d tiles.\n", totalTiles);
+            }
+            else
+            {
+                printf("No tiles loaded in manager.tilemap->tiles.\n");
+            }
+        }
+    }
+    else
+    {
+        printf("Tilemap or tiles array is not initialized.\n");
+    }
+
     int screenWidth = GetScreenWidth();
     int screenHeight = GetScreenHeight();
 
-    // Calculate how many tiles fit on the screen
-    screenTilesX = screenWidth / tileSize;  // Number of tiles horizontally
-    screenTilesY = screenHeight / tileSize; // Number of tiles vertically
+    screenTilesX = screenWidth / tileSize;
+    screenTilesY = screenHeight / tileSize;
 
-    // Allocate memory for placed tiles based on the entire screen size
-    placedTiles = (int **)malloc(screenTilesY * sizeof(int *));
+    placedTiles = (TileStack **)malloc(screenTilesY * sizeof(TileStack *));
+
     for (int i = 0; i < screenTilesY; i++)
     {
-        placedTiles[i] = (int *)malloc(screenTilesX * sizeof(int));
+        placedTiles[i] = (TileStack *)malloc(screenTilesX * sizeof(TileStack));
         for (int j = 0; j < screenTilesX; j++)
         {
-            placedTiles[i][j] = -1; // Initialize with -1 to indicate empty
+            placedTiles[i][j].tiles = NULL;
+            placedTiles[i][j].count = 0;
+            placedTiles[i][j].capacity = 0;
         }
     }
+}
+
+void PushTileToStack(TileStack *stack, int tileIndex)
+{
+    if (stack->count >= stack->capacity)
+    {
+        stack->capacity = (stack->capacity == 0) ? 4 : stack->capacity * 2; // Grow the stack capacity
+        stack->tiles = (int *)realloc(stack->tiles, stack->capacity * sizeof(int));
+    }
+    stack->tiles[stack->count++] = tileIndex; // Add the new tile on top
 }
 
 void UpdateTilePlacementScene(float deltaTime)
 {
-    // Update mouse position
     mousePosition = GetMousePosition();
 
-    // Snap the mouse position to the nearest tile grid
-    int tileX = (int)(mousePosition.x / tileSize); // Snap X to nearest tile grid
-    int tileY = (int)(mousePosition.y / tileSize); // Snap Y to nearest tile grid
+    int tileX = (int)(mousePosition.x / tileSize);
+    int tileY = (int)(mousePosition.y / tileSize);
 
-    // Ensure tile indices are within the bounds of the full screen grid
     if (tileX >= 0 && tileX < screenTilesX && tileY >= 0 && tileY < screenTilesY)
     {
-        // Check for left-click to place tile
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
         {
-            placedTiles[tileY][tileX] = selectedTileIndex; // Store the selected tile index
+            int tileIndex = -1;
+
+            // Check if we're placing a tile
+            if (selectedTileIndex >= 0 && selectedTileIndex < manager.tilemap[selectedTilemapIndex].totalTiles)
+            {
+                tileIndex = (selectedTilemapIndex * 1000) + selectedTileIndex;
+            }
+            // Check if we're placing a sprite
+            else if (selectedSpriteIndex >= 0 && selectedSpriteIndex < manager.spriteCount)
+            {
+                tileIndex = (selectedTilemapIndex * 1000) + manager.tilemap[selectedTilemapIndex].totalTiles + selectedSpriteIndex;
+            }
+
+            // Push to the stack if valid
+            if (tileIndex != -1)
+            {
+                PushTileToStack(&placedTiles[tileY][tileX], tileIndex);
+            }
         }
 
-        // Check for right-click to delete tile
         if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON))
         {
-            placedTiles[tileY][tileX] = -1; // Remove the tile by setting it to -1
+            // Remove the top tile from the stack if it exists
+            if (placedTiles[tileY][tileX].count > 0)
+            {
+                placedTiles[tileY][tileX].count--;
+            }
+        }
+        // Change selected tile within the current tilemap
+        if (IsKeyPressed(KEY_LEFT))
+        {
+            selectedTileIndex = (selectedTileIndex - 1 + manager.tilemap[selectedTilemapIndex].totalTiles) % manager.tilemap[selectedTilemapIndex].totalTiles;
+            selectedSpriteIndex = -1; // Deactivate sprite selection when switching to tiles
+        }
+        if (IsKeyPressed(KEY_RIGHT))
+        {
+            selectedTileIndex = (selectedTileIndex + 1) % manager.tilemap[selectedTilemapIndex].totalTiles;
+            selectedSpriteIndex = -1; // Deactivate sprite selection when switching to tiles
+        }
+
+        // Change selected sprite with UP/DOWN keys
+        if (IsKeyPressed(KEY_UP))
+        {
+            selectedSpriteIndex = (selectedSpriteIndex - 1 + manager.spriteCount) % manager.spriteCount;
+            selectedTileIndex = -1; // Deactivate tile selection when switching to sprites
+        }
+        if (IsKeyPressed(KEY_DOWN))
+        {
+            selectedSpriteIndex = (selectedSpriteIndex + 1) % manager.spriteCount;
+            selectedTileIndex = -1; // Deactivate tile selection when switching to sprites
+        }
+
+        // Switch between tilemaps with PAGE_UP and PAGE_DOWN
+        if (IsKeyPressed(KEY_PAGE_UP))
+        {
+            selectedTilemapIndex = (selectedTilemapIndex - 1 + manager.tilemapCount) % manager.tilemapCount;
+        }
+        if (IsKeyPressed(KEY_PAGE_DOWN))
+        {
+            selectedTilemapIndex = (selectedTilemapIndex + 1) % manager.tilemapCount;
         }
     }
-
-    // Tile selection with keyboard input (up/down arrows)
-    if (IsKeyPressed(KEY_UP))
-    {
-        selectedTileIndex = (selectedTileIndex - 1 + tilemap.totalTiles) % tilemap.totalTiles; // Cycle through tiles
-    }
-    if (IsKeyPressed(KEY_DOWN))
-    {
-        selectedTileIndex = (selectedTileIndex + 1) % tilemap.totalTiles; // Cycle through tiles
-    }
 }
-
 void RenderTilePlacementScene()
 {
     ClearBackground(RAYWHITE);
 
-    // Draw the placed tiles on the main grid
+    // Draw placed tiles and sprites on the grid
     for (int y = 0; y < screenTilesY; y++)
     {
         for (int x = 0; x < screenTilesX; x++)
         {
-            if (placedTiles[y][x] != -1)
+            TileStack *stack = &placedTiles[y][x];
+
+            // Render the tiles from bottom to top first
+            for (int i = 0; i < stack->count; i++)
             {
-                DrawTexture(tilemap.tiles[placedTiles[y][x]], x * tileSize, y * tileSize, WHITE);
+                int tilemapIndex = stack->tiles[i] / 1000; // Determine which tilemap the tile belongs to
+                int tileIndex = stack->tiles[i] % 1000;    // Get the tile index
+
+                // Only draw the tile from the tilemap if it exists
+                if (tileIndex < manager.tilemap[tilemapIndex].totalTiles)
+                {
+                    // Draw tile from tilemap
+                    DrawTexture(manager.tilemap[tilemapIndex].tiles[tileIndex], x * tileSize, y * tileSize, WHITE);
+                }
+            }
+        }
+    }
+
+    // Draw placed tiles and sprites on the grid
+    for (int y = 0; y < screenTilesY; y++)
+    {
+        for (int x = 0; x < screenTilesX; x++)
+        {
+            TileStack *stack = &placedTiles[y][x];
+
+            // Render the tiles from bottom to top first
+            for (int i = 0; i < stack->count; i++)
+            {
+                int tilemapIndex = stack->tiles[i] / 1000; // Determine which tilemap the tile belongs to
+                int tileIndex = stack->tiles[i] % 1000;    // Get the tile index
+
+                // Only draw the tile from the tilemap if it exists
+                if (tileIndex < manager.tilemap[tilemapIndex].totalTiles)
+                {
+                    // Draw tile from tilemap
+                    DrawTexture(manager.tilemap[tilemapIndex].tiles[tileIndex], x * tileSize, y * tileSize, WHITE);
+                }
+            }
+        }
+    }
+
+    // Now draw all the sprites on top of the tiles
+    for (int y = 0; y < screenTilesY; y++)
+    {
+        for (int x = 0; x < screenTilesX; x++)
+        {
+            TileStack *stack = &placedTiles[y][x];
+
+            for (int i = 0; i < stack->count; i++)
+            {
+                int tilemapIndex = stack->tiles[i] / 1000;
+                int tileIndex = stack->tiles[i] % 1000;
+
+                // Check if it is a sprite
+                if (tileIndex >= manager.tilemap[tilemapIndex].totalTiles)
+                {
+                    // Draw sprite on top of the tile
+                    DrawTexture(manager.sprites[tileIndex - manager.tilemap[tilemapIndex].totalTiles].texture, x * tileSize, y * tileSize, WHITE);
+                }
             }
         }
     }
 
     // Draw the grid lines
-    for (int x = 0; x <= screenTilesX; x++) // Draw vertical lines
+    for (int x = 0; x <= screenTilesX; x++)
     {
         DrawLine(x * tileSize, 0, x * tileSize, screenTilesY * tileSize, BLACK);
     }
-    for (int y = 0; y <= screenTilesY; y++) // Draw horizontal lines
+    for (int y = 0; y <= screenTilesY; y++)
     {
         DrawLine(0, y * tileSize, screenTilesX * tileSize, y * tileSize, BLACK);
     }
 
-    // Determine the number of columns and rows for the tile selection grid
-    const int tileColumns = tilemap.tileCountX;                                // Number of columns to display tiles in the selection area
-    const int tileRows = (tilemap.totalTiles + tileColumns - 1) / tileColumns; // Total number of rows needed
+    // Draw the tile selection menu at the bottom of the screen for the current tilemap
+    const int tileColumns = manager.tilemap[selectedTilemapIndex].tileCountX;
+    const int tileRows = (manager.tilemap[selectedTilemapIndex].totalTiles + tileColumns - 1) / tileColumns;
 
-    // Set the starting position of the tile selection grid (bottom of the screen)
     int selectionGridX = 0;
     int selectionGridY = GetScreenHeight() - (tileRows * tileSize);
-
-    // Draw a background for the tile selection area
     DrawRectangle(selectionGridX, selectionGridY, tileColumns * tileSize, tileRows * tileSize, (Color){100, 100, 100, 255});
 
-    // Draw the available tiles in a grid layout in the selection area
-    for (int i = 0; i < tilemap.totalTiles; i++)
+    for (int i = 0; i < manager.tilemap[selectedTilemapIndex].totalTiles; i++)
     {
-        int tileX = i % tileColumns; // Column position
-        int tileY = i / tileColumns; // Row position
-
-        // Draw each tile in the grid
-        DrawTexture(tilemap.tiles[i], selectionGridX + tileX * tileSize, selectionGridY + tileY * tileSize, WHITE);
+        int tileX = i % tileColumns;
+        int tileY = i / tileColumns;
+        DrawTexture(manager.tilemap[selectedTilemapIndex].tiles[i], selectionGridX + tileX * tileSize, selectionGridY + tileY * tileSize, WHITE);
     }
 
-    // Optionally show the currently selected tile under the mouse cursor
-    if (selectedTileIndex >= 0)
+    // Display the currently selected tile or sprite at the mouse position
+    if (selectedTileIndex >= 0 && selectedTileIndex < manager.tilemap[selectedTilemapIndex].totalTiles)
     {
-        DrawTexture(tilemap.tiles[selectedTileIndex], mousePosition.x - tileSize / 2, mousePosition.y - tileSize / 2, WHITE);
+        // Display the selected tile from the currently selected tilemap
+        DrawTexture(manager.tilemap[selectedTilemapIndex].tiles[selectedTileIndex], mousePosition.x - tileSize / 2, mousePosition.y - tileSize / 2, WHITE);
+    }
+    else if (selectedSpriteIndex >= 0 && selectedSpriteIndex < manager.spriteCount)
+    {
+        // Display the selected sprite
+        DrawTexture(manager.sprites[selectedSpriteIndex].texture, mousePosition.x - tileSize / 2, mousePosition.y - tileSize / 2, WHITE);
     }
 }
 
 void UnloadTilePlacementScene()
 {
-    UnloadTilemap(&tilemap);
+    UnloadTilemap();
 
-    // Free allocated memory for placed tiles
-    for (int i = 0; i < tilemap.tileCountY; i++)
+    for (int i = 0; i < screenTilesY; i++)
     {
         free(placedTiles[i]);
     }

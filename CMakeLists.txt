@@ -27,3 +27,9 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 
 # Link against the pre-built raylib library
 target_link_libraries(${PROJECT_NAME} /opt/git/RayLibRPG/libs/raylib/build/raylib/libraylib.a m)
+        
+# Set debug flags if in Debug mode
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -fsanitize=address")
+
+# Optionally enable optimizations for Release mode
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O2")

@@ -4,6 +4,7 @@
         "stat.h": "c",
         "dirent.h": "c",
         "tilemap.h": "c",
-        "tile_placement_scene.h": "c"
+        "tile_placement_scene.h": "c",
+        "stdio.h": "c"
     }
 }
