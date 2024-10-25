@@ -2,28 +2,21 @@
 #include "tilemap.h"
 #include "asset_manager.h"
 #include <stdlib.h>
+#include <dirent.h>
+#include "tile_placement_data.h"
+#include "raylib_utils.h"
+#include <stdbool.h>
 
 static Vector2 mousePosition;
-static int selectedTileIndex = 0;
-static int selectedSpriteIndex = 0;
-static int selectedTilemapIndex = 0;
-static const int tileSize = 64;
-static int screenTilesX;
-static int screenTilesY;
-
-typedef struct TileStack
-{
-    int *tiles;   // Array of tile indices
-    int count;    // Number of tiles in the stack
-    int capacity; // Capacity of the tile stack (for dynamic allocation)
-} TileStack;
-
-static TileStack **placedTiles;
+bool isTileCollidable = false; // Global collidability state
 
 void InitTilePlacementScene()
 {
     InitAssetManager(&manager);
     LoadAssetsFromDirectory(&manager, ASSET_PATH);
+    int screenWidth = GetScreenWidth();
+    int screenHeight = GetScreenHeight();
+    InitTileData(screenWidth, screenHeight);
 
     // Log tile information
     if (manager.tilemap && manager.tilemap->tiles)
@@ -45,35 +38,6 @@ void InitTilePlacementScene()
     {
         printf("Tilemap or tiles array is not initialized.\n");
     }
-
-    int screenWidth = GetScreenWidth();
-    int screenHeight = GetScreenHeight();
-
-    screenTilesX = screenWidth / tileSize;
-    screenTilesY = screenHeight / tileSize;
-
-    placedTiles = (TileStack **)malloc(screenTilesY * sizeof(TileStack *));
-
-    for (int i = 0; i < screenTilesY; i++)
-    {
-        placedTiles[i] = (TileStack *)malloc(screenTilesX * sizeof(TileStack));
-        for (int j = 0; j < screenTilesX; j++)
-        {
-            placedTiles[i][j].tiles = NULL;
-            placedTiles[i][j].count = 0;
-            placedTiles[i][j].capacity = 0;
-        }
-    }
-}
-
-void PushTileToStack(TileStack *stack, int tileIndex)
-{
-    if (stack->count >= stack->capacity)
-    {
-        stack->capacity = (stack->capacity == 0) ? 4 : stack->capacity * 2; // Grow the stack capacity
-        stack->tiles = (int *)realloc(stack->tiles, stack->capacity * sizeof(int));
-    }
-    stack->tiles[stack->count++] = tileIndex; // Add the new tile on top
 }
 
 void UpdateTilePlacementScene(float deltaTime)
@@ -82,6 +46,20 @@ void UpdateTilePlacementScene(float deltaTime)
 
     int tileX = (int)(mousePosition.x / tileSize);
     int tileY = (int)(mousePosition.y / tileSize);
+
+    // Detect if the Load button is clicked
+    if (CheckCollisionPointRec(mousePosition, loadButton) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    {
+        LoadFirstMapInDirectory("../maps");
+        printf("First map loaded from ../maps\n");
+    }
+
+    // Detect if the Save button is clicked
+    if (CheckCollisionPointRec(mousePosition, saveButton) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    {
+        SaveTilePlacement("../maps/map1.dat");
+        printf("Map saved to ../maps/map1.dat\n");
+    }
 
     if (tileX >= 0 && tileX < screenTilesX && tileY >= 0 && tileY < screenTilesY)
     {
@@ -103,7 +81,7 @@ void UpdateTilePlacementScene(float deltaTime)
             // Push to the stack if valid
             if (tileIndex != -1)
             {
-                PushTileToStack(&placedTiles[tileY][tileX], tileIndex);
+                PushTileToStack(&placedTiles[tileY][tileX], tileIndex, isTileCollidable);
             }
         }
 
@@ -114,6 +92,12 @@ void UpdateTilePlacementScene(float deltaTime)
             {
                 placedTiles[tileY][tileX].count--;
             }
+        }
+        // Toggle collidability with the "C" key
+        if (IsKeyPressed(KEY_C))
+        {
+            isTileCollidable = !isTileCollidable;
+            printf("Collidability set to: %s\n", isTileCollidable ? "ON" : "OFF");
         }
         // Change selected tile within the current tilemap
         if (IsKeyPressed(KEY_LEFT))
@@ -150,9 +134,18 @@ void UpdateTilePlacementScene(float deltaTime)
         }
     }
 }
+
 void RenderTilePlacementScene()
 {
-    ClearBackground(RAYWHITE);
+    ClearBackground(GetColorFromHex("#47aaa9"));
+
+    // Draw Save button
+    DrawRectangleRec(saveButton, LIGHTGRAY);
+    DrawText("Save Map", saveButton.x + 10, saveButton.y + 10, 10, BLACK);
+
+    // Draw Load button
+    DrawRectangleRec(loadButton, LIGHTGRAY);
+    DrawText("Load Map", loadButton.x + 10, loadButton.y + 10, 10, BLACK);
 
     // Draw placed tiles and sprites on the grid
     for (int y = 0; y < screenTilesY; y++)
@@ -240,6 +233,10 @@ void RenderTilePlacementScene()
     int selectionGridY = GetScreenHeight() - (tileRows * tileSize);
     DrawRectangle(selectionGridX, selectionGridY, tileColumns * tileSize, tileRows * tileSize, (Color){100, 100, 100, 255});
 
+    // Show collidability state
+    const char *collidabilityText = isTileCollidable ? "Collidability: ON" : "Collidability: OFF";
+    DrawText(collidabilityText, 250, 10, 24, isTileCollidable ? GREEN : RED);
+
     for (int i = 0; i < manager.tilemap[selectedTilemapIndex].totalTiles; i++)
     {
         int tileX = i % tileColumns;
@@ -262,11 +259,26 @@ void RenderTilePlacementScene()
 
 void UnloadTilePlacementScene()
 {
-    UnloadTilemap();
-
-    for (int i = 0; i < screenTilesY; i++)
+    if (placedTiles != NULL)
     {
-        free(placedTiles[i]);
+        // Free each row of TileStack
+        for (int i = 0; i < screenTilesY; i++)
+        {
+            if (placedTiles[i] != NULL)
+            {
+                // Free any dynamically allocated tiles within each TileStack
+                for (int j = 0; j < screenTilesX; j++)
+                {
+                    if (placedTiles[i][j].tiles != NULL)
+                    {
+                        free(placedTiles[i][j].tiles);  // Free the tile array
+                        placedTiles[i][j].tiles = NULL; // Reset pointer
+                    }
+                }
+                free(placedTiles[i]); // Free the row itself
+            }
+        }
+        free(placedTiles); // Free the top-level pointer
+        placedTiles = NULL;
     }
-    free(placedTiles);
 }

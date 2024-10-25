@@ -11,15 +11,18 @@ set(CMAKE_C_STANDARD_REQUIRED True)
 include_directories(/opt/git/RayLibRPG/libs/raylib/src)
 include_directories(${CMAKE_SOURCE_DIR}/src/scenes)
 include_directories(${CMAKE_SOURCE_DIR}/src/core)
+include_directories(${CMAKE_SOURCE_DIR}/src/utils)
 
 # Source files
 file(GLOB_RECURSE SCENE_SOURCES src/scenes/*.c)
 file(GLOB_RECURSE CORE_SOURCES src/core/*.c)
+file(GLOB_RECURSE UTILS_SOURCES src/utils/*.c)
 
 set(SOURCES
     src/main.c
     ${SCENE_SOURCES}
     ${CORE_SOURCES}
+    ${UTILS_SOURCES}
 )
 
 # Create the executable
@@ -27,7 +30,7 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 
 # Link against the pre-built raylib library
 target_link_libraries(${PROJECT_NAME} /opt/git/RayLibRPG/libs/raylib/build/raylib/libraylib.a m)
-        
+
 # Set debug flags if in Debug mode
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -fsanitize=address")
 

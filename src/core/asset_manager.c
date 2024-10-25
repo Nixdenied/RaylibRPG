@@ -10,17 +10,7 @@
 #include <stdlib.h>
 #include "tilemap.h"
 #include "asset_manager.h"
-
-unsigned long HashString(const char *str)
-{
-    unsigned long hash = 5381;
-    int c;
-    while ((c = *str++))
-    {
-        hash = ((hash << 5) + hash) + c; // hash * 33 + c
-    }
-    return hash;
-}
+#include "raylib_utils.h"
 
 void AddAssetToHashTable(AssetManager *manager, const char *name, Sprite sprite)
 {

@@ -1,14 +1,16 @@
 #include "raylib_wrapper.h"
 #include "scene_manager.h"
 #include "debug_scene.h"
-#include "tile_placement_scene.h" // Include the tile placement scene header
+#include "tile_placement_scene.h"
+#include "test_map_scene.h"
+#include "main_menu_scene.h"
 
 static GameScene currentScene;
 
 void InitSceneManager()
 {
-    currentScene = SCENE_TILE_PLACEMENT; // Initialize to the debug scene
-    InitTilePlacementScene();
+    currentScene = SCENE_MAIN_MENU; // Initialize to the debug scene
+    InitMainMenuScene();
 }
 
 void ChangeScene(GameScene newScene)
@@ -23,6 +25,12 @@ void ChangeScene(GameScene newScene)
     case SCENE_TILE_PLACEMENT:
         InitTilePlacementScene(); // Initialize tile placement scene
         break;
+    case SCENE_TEST:
+        InitTestMapScene();
+        break;
+    case SCENE_MAIN_MENU:
+        InitMainMenuScene();
+        break;
     }
 }
 
@@ -35,6 +43,12 @@ void UpdateCurrentScene(float deltaTime)
         break;
     case SCENE_TILE_PLACEMENT:
         UpdateTilePlacementScene(deltaTime); // Update tile placement scene
+        break;
+    case SCENE_TEST:
+        UpdateTestMapScene(deltaTime);
+        break;
+    case SCENE_MAIN_MENU:
+        UpdateMainMenuScene(deltaTime);
         break;
     }
 }
@@ -49,6 +63,12 @@ void RenderCurrentScene()
         break;
     case SCENE_TILE_PLACEMENT:
         RenderTilePlacementScene(); // Render tile placement scene
+        break;
+    case SCENE_TEST:
+        RenderTestMapScene();
+        break;
+    case SCENE_MAIN_MENU:
+        RenderMainMenuScene();
         break;
     }
     EndDrawing();

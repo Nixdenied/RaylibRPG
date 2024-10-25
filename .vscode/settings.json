@@ -5,6 +5,10 @@
         "dirent.h": "c",
         "tilemap.h": "c",
         "tile_placement_scene.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "utils.h": "c",
+        "raylib_utils.h": "c",
+        "stdlib.h": "c",
+        "main_menu_scene.h": "c"
     }
 }
