@@ -36,50 +36,26 @@ void AddAnimationToHashTable(AssetManager *manager, const char *name, Animation 
 
 Sprite GetSprite(AssetManager *manager, const char *name)
 {
-    unsigned long hash = HashString(name) % HASH_TABLE_SIZE;
-    AssetNode *node = manager->hashTable[hash];
-
-    while (node)
+    for (int i = 0; i < manager->spriteCount; i++)
     {
-        if (strcmp(node->name, name) == 0)
+        if (strcmp(manager->sprites[i].name, name) == 0)
         {
-            return node->sprite; // Return the sprite struct directly
+            return manager->sprites[i]; // Return the sprite directly from the array
         }
-        node = node->next;
     }
     return (Sprite){0}; // Return a default sprite if not found
 }
 
 Animation GetAnimation(AssetManager *manager, const char *name)
 {
-    unsigned long hash = HashString(name) % HASH_TABLE_SIZE;
-    AssetNode *node = manager->hashTable[hash];
-
-    while (node)
+    for (int i = 0; i < manager->animationCount; i++)
     {
-        if (strcmp(node->name, name) == 0)
+        if (strcmp(manager->animations[i].name, name) == 0)
         {
-            return node->animation; // Return the animation struct directly
+            return manager->animations[i]; // Return the animation directly from the array
         }
-        node = node->next;
     }
     return (Animation){0}; // Return a default animation if not found
-}
-
-Tilemap GetTilemap(AssetManager *manager, const char *name)
-{
-    unsigned long hash = HashString(name) % HASH_TABLE_SIZE;
-    AssetNode *node = manager->hashTable[hash];
-
-    while (node)
-    {
-        if (strcmp(node->name, name) == 0)
-        {
-            return node->tilemap; // Return the tilemap struct directly
-        }
-        node = node->next;
-    }
-    return (Tilemap){0}; // Return a default tilemap if not found
 }
 
 // Function to parse the filename and extract animation data
@@ -198,57 +174,61 @@ void LoadSprite(AssetManager *manager, const char *filePath)
 
 void LoadAnimation(AssetManager *manager, const char *filePath)
 {
-    if (manager->animationCount < MAX_ANIMATIONS)
-    {
-        manager->animations[manager->animationCount].texture = LoadTexture(filePath);
-
-        // Variables to hold parsed information
-        int rows, framesPerRow, frameWidth, frameHeight;
-        char name[64]; // Variable to hold the name
-
-        // Parse the filename to get name, rows, framesPerRow, frameWidth, frameHeight
-        ParseAnimationInfoFromFilename(filePath, name, &rows, &framesPerRow, &frameWidth, &frameHeight);
-
-        // Copy the name and set the flag for drawing the name
-        strncpy(manager->animations[manager->animationCount].name, name, 64);
-        manager->animations[manager->animationCount].drawName = true; // Set this to true or false as needed
-
-        // The rest of the logic for loading animations...
-        manager->animations[manager->animationCount].frameWidth = frameWidth;
-        manager->animations[manager->animationCount].frameHeight = frameHeight;
-        manager->animations[manager->animationCount].rows = rows;
-        manager->animations[manager->animationCount].framesPerRow = framesPerRow;
-        manager->animations[manager->animationCount].frameCount = rows * framesPerRow;
-
-        // Allocate memory for the frame rectangles
-        manager->animations[manager->animationCount].frames =
-            (Rectangle *)malloc(manager->animations[manager->animationCount].frameCount * sizeof(Rectangle));
-
-        for (int y = 0; y < rows; y++)
-        {
-            for (int x = 0; x < framesPerRow; x++)
-            {
-                int index = y * framesPerRow + x;
-                manager->animations[manager->animationCount].frames[index] = (Rectangle){
-                    x * frameWidth,
-                    y * frameHeight,
-                    frameWidth,
-                    frameHeight};
-            }
-        }
-
-        // Add the loaded animation to the hash table for fast lookup
-        AddAnimationToHashTable(manager, name, manager->animations[manager->animationCount]);
-
-        manager->animations[manager->animationCount].currentFrame = 0;
-        manager->animations[manager->animationCount].frameTime = 0.1f; // 100 ms
-        manager->animations[manager->animationCount].elapsedTime = 0.0f;
-
-        manager->animationCount++;
-    }
-    else
+    if (manager->animationCount >= MAX_ANIMATIONS)
     {
         printf("Max animations loaded!\n");
+        return;
+    }
+
+    Texture2D texture = LoadTexture(filePath);
+
+    // Variables to hold parsed information
+    int rows, framesPerRow, frameWidth, frameHeight;
+    char baseName[64];
+
+    // Parse the filename to get name, rows, framesPerRow, frameWidth, frameHeight
+    ParseAnimationInfoFromFilename(filePath, baseName, &rows, &framesPerRow, &frameWidth, &frameHeight);
+
+    // Loop through each row to create a separate animation
+    for (int row = 0; row < rows; row++)
+    {
+        if (manager->animationCount >= MAX_ANIMATIONS) 
+        {
+            printf("Max animations loaded!\n");
+            break;
+        }
+
+        // Construct a unique name for each row
+        char animationName[64];
+        snprintf(animationName, sizeof(animationName), "%s_%d", baseName, row + 1);
+
+        // Initialize the animation struct for this row
+        Animation *animation = &manager->animations[manager->animationCount];
+        animation->texture = texture;
+        strncpy(animation->name, animationName, sizeof(animation->name));
+        animation->drawName = true;
+
+        // Set frame details
+        animation->frameWidth = frameWidth;
+        animation->frameHeight = frameHeight;
+        animation->rows = 1; // Each row is treated as its own "single-row" animation
+        animation->framesPerRow = framesPerRow;
+        animation->frameCount = framesPerRow;
+        animation->currentFrame = 0;
+        animation->frameTime = 0.1f; // 100 ms
+        animation->elapsedTime = 0.0f;
+
+        // Allocate memory for frames and assign each frame's rectangle
+        animation->frames = (Rectangle *)malloc(framesPerRow * sizeof(Rectangle));
+        for (int x = 0; x < framesPerRow; x++)
+        {
+            animation->frames[x] = (Rectangle){x * frameWidth, row * frameHeight, frameWidth, frameHeight};
+        }
+
+        // Add this animation to the hash table with its unique name
+        AddAnimationToHashTable(manager, animationName, *animation);
+
+        manager->animationCount++;
     }
 }
 
