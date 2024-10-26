@@ -79,4 +79,4 @@ unsigned long HashString(const char *str);
 void AddAnimationToHashTable(AssetManager *manager, const char *name, Animation animation);
 Sprite GetSprite(AssetManager *manager, const char *name);
 Animation GetAnimation(AssetManager *manager, const char *name);
-Tilemap GetTilemap(AssetManager *manager, const char *name);       
+void PrintAllAnimationNames(AssetManager *manager);

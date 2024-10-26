@@ -58,6 +58,13 @@ Animation GetAnimation(AssetManager *manager, const char *name)
     return (Animation){0}; // Return a default animation if not found
 }
 
+void PrintAllAnimationNames(AssetManager *manager) {
+    printf("Available Animations:\n");
+    for (int i = 0; i < manager->animationCount; i++) {
+        printf(" - %s\n", manager->animations[i].name);
+    }
+}
+
 // Function to parse the filename and extract animation data
 // Modified function to parse filename and extract name, rows, framesPerRow, frameWidth, frameHeight
 void ParseAnimationInfoFromFilename(const char *filePath, char *name, int *rows, int *framesPerRow, int *frameWidth, int *frameHeight)

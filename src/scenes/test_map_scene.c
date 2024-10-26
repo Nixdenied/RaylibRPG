@@ -8,10 +8,18 @@
 #include <time.h>
 #include "asset_manager.h"
 #include "tile_placement_data.h"
+#include "npc.h"
 
 Vector2 squarePosition = {600, 400}; // Initial position of the square
 const float squareSpeed = 200.0f;    // Speed of the square
 Rectangle squareBounds;              // Bounds of the square
+
+// Assuming you have a maximum number of NPCs
+#define MAX_NPCS 10
+
+// Add these global or scene-specific variables
+NPC npcs[MAX_NPCS];
+int npcCount = 0; // Current number of NPCs
 
 bool CheckCollisionWithTiles(Rectangle square)
 {
@@ -49,8 +57,18 @@ void InitTestMapScene()
     LoadAssetsFromDirectory(&manager, ASSET_PATH);
     int screenWidth = GetScreenWidth();
     int screenHeight = GetScreenHeight();
-    InitTileData(screenWidth, screenHeight);
-    LoadFirstMapInDirectory("../maps"); // Load a map from your specified directory
+
+    // Initialize map size and screen size
+    InitTileData(256, 256, screenWidth, screenHeight); // Initialize with default map size
+    LoadFirstMapInDirectory("../maps");                // Load a map from your specified directory
+    PrintAllAnimationNames(&manager);
+
+    if (npcCount < MAX_NPCS)
+    {
+        InitNPC(&npcs[npcCount], (Vector2){300, 300}, 100.0f, "idle_animation");
+        npcs[npcCount].drawName = true; // Optional: Display NPC's name
+        npcCount++;
+    }
 }
 
 void UpdateTestMapScene(float deltaTime)
@@ -73,80 +91,114 @@ void UpdateTestMapScene(float deltaTime)
     {
         squarePosition = newPosition; // Only update position if no collision
     }
+
+    // Update NPCs
+    for (int i = 0; i < npcCount; i++)
+    {
+        UpdateNPC(&npcs[i], deltaTime);
+
+        if (npcs[i].state == NPC_WALKING)
+        {
+            // Move NPC in the current walking direction
+            npcs[i].position.x += npcs[i].speed * deltaTime;
+
+            // Check boundaries to change state to idle
+            if (npcs[i].position.x >= 500) // Right boundary
+            {
+                SetNPCState(&npcs[i], NPC_IDLE);
+                npcs[i].speed = -fabs(npcs[i].speed); // Set speed to negative for moving left
+            }
+            else if (npcs[i].position.x <= 100) // Left boundary
+            {
+                SetNPCState(&npcs[i], NPC_IDLE);
+                npcs[i].speed = fabs(npcs[i].speed); // Set speed to positive for moving right
+            }
+        }
+        else if (npcs[i].state == NPC_IDLE)
+        {
+            // After idling, switch back to walking
+            SetNPCState(&npcs[i], NPC_WALKING);
+        }
+    }
 }
-
-void RenderTestMapScene()
-{
-    ClearBackground(BLACK);
-
-    // Draw placed tiles and sprites on the grid
-    for (int y = 0; y < screenTilesY; y++)
+    void RenderTestMapScene()
     {
-        for (int x = 0; x < screenTilesX; x++)
+        ClearBackground(BLACK);
+
+        // Draw placed tiles and sprites on the grid
+        for (int y = 0; y < screenTilesY; y++)
         {
-            TileStack *stack = &placedTiles[y][x];
-
-            // Render the tiles from bottom to top first
-            for (int i = 0; i < stack->count; i++)
+            for (int x = 0; x < screenTilesX; x++)
             {
-                int tilemapIndex = stack->tiles[i] / 1000; // Determine which tilemap the tile belongs to
-                int tileIndex = stack->tiles[i] % 1000;    // Get the tile index
+                TileStack *stack = &placedTiles[y][x];
 
-                // Only draw the tile from the tilemap if it exists
-                if (tileIndex < manager.tilemap[tilemapIndex].totalTiles)
+                // Render the tiles from bottom to top first
+                for (int i = 0; i < stack->count; i++)
                 {
-                    // Draw tile from tilemap
-                    DrawTexture(manager.tilemap[tilemapIndex].tiles[tileIndex], x * tileSize, y * tileSize, WHITE);
+                    int tilemapIndex = stack->tiles[i] / 1000; // Determine which tilemap the tile belongs to
+                    int tileIndex = stack->tiles[i] % 1000;    // Get the tile index
+
+                    // Only draw the tile from the tilemap if it exists
+                    if (tileIndex < manager.tilemap[tilemapIndex].totalTiles)
+                    {
+                        // Draw tile from tilemap
+                        DrawTexture(manager.tilemap[tilemapIndex].tiles[tileIndex], x * tileSize, y * tileSize, WHITE);
+                    }
                 }
             }
         }
-    }
 
-    // Draw placed tiles and sprites on the grid
-    for (int y = 0; y < screenTilesY; y++)
-    {
-        for (int x = 0; x < screenTilesX; x++)
+        // Draw placed tiles and sprites on the grid
+        for (int y = 0; y < screenTilesY; y++)
         {
-            TileStack *stack = &placedTiles[y][x];
-
-            // Render the tiles from bottom to top first
-            for (int i = 0; i < stack->count; i++)
+            for (int x = 0; x < screenTilesX; x++)
             {
-                int tilemapIndex = stack->tiles[i] / 1000; // Determine which tilemap the tile belongs to
-                int tileIndex = stack->tiles[i] % 1000;    // Get the tile index
+                TileStack *stack = &placedTiles[y][x];
 
-                // Only draw the tile from the tilemap if it exists
-                if (tileIndex < manager.tilemap[tilemapIndex].totalTiles)
+                // Render the tiles from bottom to top first
+                for (int i = 0; i < stack->count; i++)
                 {
-                    // Draw tile from tilemap
-                    DrawTexture(manager.tilemap[tilemapIndex].tiles[tileIndex], x * tileSize, y * tileSize, WHITE);
+                    int tilemapIndex = stack->tiles[i] / 1000; // Determine which tilemap the tile belongs to
+                    int tileIndex = stack->tiles[i] % 1000;    // Get the tile index
+
+                    // Only draw the tile from the tilemap if it exists
+                    if (tileIndex < manager.tilemap[tilemapIndex].totalTiles)
+                    {
+                        // Draw tile from tilemap
+                        DrawTexture(manager.tilemap[tilemapIndex].tiles[tileIndex], x * tileSize, y * tileSize, WHITE);
+                    }
                 }
             }
         }
-    }
 
-    // Now draw all the sprites on top of the tiles
-    for (int y = 0; y < screenTilesY; y++)
-    {
-        for (int x = 0; x < screenTilesX; x++)
+        // Now draw all the sprites on top of the tiles
+        for (int y = 0; y < screenTilesY; y++)
         {
-            TileStack *stack = &placedTiles[y][x];
-
-            for (int i = 0; i < stack->count; i++)
+            for (int x = 0; x < screenTilesX; x++)
             {
-                int tilemapIndex = stack->tiles[i] / 1000;
-                int tileIndex = stack->tiles[i] % 1000;
+                TileStack *stack = &placedTiles[y][x];
 
-                // Check if it is a sprite
-                if (tileIndex >= manager.tilemap[tilemapIndex].totalTiles)
+                for (int i = 0; i < stack->count; i++)
                 {
-                    // Draw sprite on top of the tile
-                    DrawTexture(manager.sprites[tileIndex - manager.tilemap[tilemapIndex].totalTiles].texture, x * tileSize, y * tileSize, WHITE);
+                    int tilemapIndex = stack->tiles[i] / 1000;
+                    int tileIndex = stack->tiles[i] % 1000;
+
+                    // Check if it is a sprite
+                    if (tileIndex >= manager.tilemap[tilemapIndex].totalTiles)
+                    {
+                        // Draw sprite on top of the tile
+                        DrawTexture(manager.sprites[tileIndex - manager.tilemap[tilemapIndex].totalTiles].texture, x * tileSize, y * tileSize, WHITE);
+                    }
                 }
             }
         }
-    }
 
-    // Draw the controllable square
-    DrawRectangle(squarePosition.x, squarePosition.y, 50, 50, BLUE); // A blue square of 50x50
-}
+        // Draw NPCs on top of the tiles
+        for (int i = 0; i < npcCount; i++)
+        {
+            DrawNPC(&npcs[i]);
+        }
+
+        // Draw the controllable square
+        DrawRectangle(squarePosition.x, squarePosition.y, 50, 50, BLUE); // A blue square of 50x50
+    }
