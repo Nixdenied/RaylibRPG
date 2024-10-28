@@ -42,6 +42,7 @@ void InitTilePlacementScene()
 {
     InitAssetManager(&manager);
     LoadAssetsFromDirectory(&manager, ASSET_PATH);
+    LoadNewAssets(&manager, "../assets/Tiny Swords (Update 010)/");
     int screenWidth = GetScreenWidth();
     int screenHeight = GetScreenHeight();
 
@@ -404,7 +405,7 @@ void RenderTilePlacementScene()
         DrawText("Left Click - Place tile", boxX + padding, lineY, fontSize, textColor);
         lineY += fontSize + padding;
         DrawText("Right Click - Remove tile", boxX + padding, lineY, fontSize, textColor);
-    }               
+    }
 
     // Draw Save button
     DrawRectangleRec(saveButton, LIGHTGRAY);

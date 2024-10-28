@@ -56,6 +56,7 @@ void InitTestMapScene()
 {
     InitAssetManager(&manager);
     LoadAssetsFromDirectory(&manager, ASSET_PATH);
+    LoadNewAssets(&manager, "../assets/Tiny Swords (Update 010)/");
     int screenWidth = GetScreenWidth();
     int screenHeight = GetScreenHeight();
 
