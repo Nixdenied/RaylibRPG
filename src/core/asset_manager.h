@@ -75,7 +75,7 @@ void LoadSprite(AssetManager *manager, const char *filePath);
 void LoadAnimation(AssetManager *manager, const char *filePath);
 void UpdateAnimations(AssetManager *manager, float deltaTime);
 void UnloadAssets(AssetManager *manager);
-bool IsFrameBlank(Texture2D texture, Rectangle frame);
+bool IsFrameBlank(Image texture, Rectangle frame);
 void ParseAnimationInfoFromFilename(const char *filePath, char *name, int *rows, int *framesPerRow, int *frameWidth, int *frameHeight);
 void AddAssetToHashTable(AssetManager *manager, const char *name, Sprite sprite);
 unsigned long HashString(const char *str);

@@ -126,39 +126,32 @@ void InitAssetManager(AssetManager *manager)
     manager->tilemapCount = 0;
 }
 
-bool IsFrameBlank(Texture2D texture, Rectangle frame)
+bool IsFrameBlank(Image fullImage, Rectangle frame)
 {
-    // Get image data from texture
-    Image fullImage = LoadImageFromTexture(texture);
-    if (fullImage.format != UNCOMPRESSED_R8G8B8A8)
-    {
-        // Convert image to RGBA8 if not already
-        ImageFormat(&fullImage, UNCOMPRESSED_R8G8B8A8);
-    }
-
     // Extract the frame as a sub-image
     Image frameImage = ImageFromImage(fullImage, frame);
 
-    // Calculate the average alpha for the frame image
+    // Load pixel colors
     Color *pixels = LoadImageColors(frameImage);
     int totalPixels = frameImage.width * frameImage.height;
-    int totalAlpha = 0;
+
+    bool isBlank = true;
 
     for (int i = 0; i < totalPixels; i++)
     {
-        totalAlpha += pixels[i].a;
+        if (pixels[i].a > 0)
+        {
+            isBlank = false;
+            break; // Exit early as we found a non-transparent pixel
+        }
     }
-
+        
     // Free image data
     UnloadImageColors(pixels);
     UnloadImage(frameImage);
-    UnloadImage(fullImage);
 
-    // Determine if the frame is blank based on average alpha
-    float averageAlpha = (float)totalAlpha / totalPixels;
-    return (averageAlpha < 10.0f); // Threshold can be adjusted
+    return isBlank;
 }
-
 
 void LoadSprite(AssetManager *manager, const char *filePath)
 {
@@ -192,6 +185,11 @@ void LoadAnimation(AssetManager *manager, const char *filePath)
     }
 
     Texture2D texture = LoadTexture(filePath);
+    if (texture.id == 0)
+    {
+        printf("Failed to load texture: %s\n", filePath);
+        return;
+    }
 
     // Variables to hold parsed information
     int rows, framesPerRow, frameWidth, frameHeight;
@@ -199,6 +197,13 @@ void LoadAnimation(AssetManager *manager, const char *filePath)
 
     // Parse the filename to get name, rows, framesPerRow, frameWidth, frameHeight
     ParseAnimationInfoFromFilename(filePath, baseName, &rows, &framesPerRow, &frameWidth, &frameHeight);
+
+    // Load the full image once to optimize frame checks
+    Image fullImage = LoadImageFromTexture(texture);
+    if (fullImage.format != PIXELFORMAT_UNCOMPRESSED_R8G8B8A8)
+    {
+        ImageFormat(&fullImage, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    }
 
     // Loop through each row to create a separate animation
     for (int row = 0; row < rows; row++)
@@ -213,6 +218,33 @@ void LoadAnimation(AssetManager *manager, const char *filePath)
         char animationName[64];
         snprintf(animationName, sizeof(animationName), "%s_%d", baseName, row + 1);
 
+        // Temporary list to store non-blank frames
+        Rectangle *validFrames = malloc(framesPerRow * sizeof(Rectangle));
+        if (!validFrames)
+        {
+            printf("Memory allocation failed for frames of animation '%s'. Skipping.\n", animationName);
+            continue;
+        }
+        int validFrameCount = 0;
+
+        // Iterate through each frame in the row
+        for (int x = 0; x < framesPerRow; x++)
+        {
+            Rectangle frame = (Rectangle){x * frameWidth, row * frameHeight, frameWidth, frameHeight};
+            if (!IsFrameBlank(fullImage, frame))
+            {
+                validFrames[validFrameCount++] = frame;
+            }
+        }
+
+        // If no valid frames, skip this animation
+        if (validFrameCount == 0)
+        {
+            printf("All frames in animation '%s' are blank. Skipping.\n", animationName);
+            free(validFrames);
+            continue;
+        }
+
         // Initialize the animation struct for this row
         Animation *animation = &manager->animations[manager->animationCount];
         animation->texture = texture;
@@ -224,23 +256,30 @@ void LoadAnimation(AssetManager *manager, const char *filePath)
         animation->frameHeight = frameHeight;
         animation->rows = 1; // Each row is treated as its own "single-row" animation
         animation->framesPerRow = framesPerRow;
-        animation->frameCount = framesPerRow;
+        animation->frameCount = validFrameCount;
         animation->currentFrame = 0;
         animation->frameTime = 0.1f; // 100 ms
         animation->elapsedTime = 0.0f;
 
-        // Allocate memory for frames and assign each frame's rectangle
-        animation->frames = (Rectangle *)malloc(framesPerRow * sizeof(Rectangle));
-        for (int x = 0; x < framesPerRow; x++)
+        // Allocate memory for frames and assign each valid frame's rectangle
+        animation->frames = malloc(validFrameCount * sizeof(Rectangle));
+        if (!animation->frames)
         {
-            animation->frames[x] = (Rectangle){x * frameWidth, row * frameHeight, frameWidth, frameHeight};
+            printf("Memory allocation failed for frames of animation '%s'. Skipping.\n", animationName);
+            free(validFrames);
+            continue;
         }
+        memcpy(animation->frames, validFrames, validFrameCount * sizeof(Rectangle));
+        free(validFrames);
 
         // Add this animation to the hash table with its unique name
         AddAnimationToHashTable(manager, animationName, *animation);
 
         manager->animationCount++;
     }
+
+    // Free the full image data after processing all frames
+    UnloadImage(fullImage);
 }
 
 int CompareEntries(const void *a, const void *b)
