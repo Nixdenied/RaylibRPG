@@ -4,62 +4,124 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "asset_manager.h"
-#include <stdio.h> // For fprintf
+#include <stdio.h>
+#include <math.h>
+
+int npcCount = 0;
 
 /**
  * @brief Initializes an NPC with the given position, speed, and initial animation.
  *
  * @param npc Pointer to the NPC to initialize.
+ * @param manager Pointer to the AssetManager.
  * @param position Initial position of the NPC.
  * @param speed Movement speed of the NPC (pixels per second).
  * @param initialAnimationName Name of the initial animation to assign.
  */
-void InitNPC(NPC *npc, Vector2 position, float speed, const char *initialAnimationName) {
+void InitNPC(NPC *npc, AssetManager *manager, Vector2 position, float speed, const char *initialAnimationName)
+{
     npc->position = position;
+    npc->targetPosition = position;
     npc->speed = speed;
     npc->state = NPC_IDLE;
+    npc->health = 100.0f;
+    npc->strength = 10;
+    npc->defense = 5;
+    npc->unitType = initialAnimationName;
+
     npc->isCollidable = true;
     npc->drawName = false;
+    npc->isSelected = false;
 
-    // Assign animation by value
-    Animation initialAnimation = GetAnimation(&manager, initialAnimationName);
-    if (initialAnimation.frameCount > 0) { // Assuming a valid animation has at least one frame
+    npc->collisionRadius = 30.0f;      // Set collision radius (adjust as necessary)
+    npc->separationForce = 50.0f;      // Set separation force strength (adjust as needed)
+
+    Animation initialAnimation = GetAnimation(manager, initialAnimationName);
+    if (initialAnimation.frameCount > 0)
+    {
         npc->animation = initialAnimation;
         npc->animation.currentFrame = 0;
         npc->animation.elapsedTime = 0.0f;
-    } else {
-        fprintf(stderr, "Error: Animation '%s' not found or invalid. NPC initialized without animation.\n", initialAnimationName);
-        // Initialize with a default or empty animation if necessary
+    }
+    else
+    {
+        fprintf(stderr, "Error: Animation '%s' not found or invalid.\n", initialAnimationName);
+        npc->animation = (Animation){0};
     }
 }
 
-/**
- * @brief Updates the NPC's logic based on its current state and the elapsed time.
- *
- * @param npc Pointer to the NPC to update.
- * @param deltaTime Time elapsed since the last frame (in seconds).
- */
-void UpdateNPC(NPC *npc, float deltaTime) {
-    switch (npc->state) {
-        case NPC_IDLE:
-            // Idle behavior (e.g., stand still)
-            break;
-        case NPC_WALKING:
-            // Example: Move to the right
-            npc->position.x += npc->speed * deltaTime;
-            UpdateAnimation(&npc->animation);
-            break;
-        case NPC_TALKING:
-            // Implement talking behavior
-            break;
-        case NPC_ATTACKING:
-            // Implement attacking behavior
-            break;
-        case NPC_DEAD:
-            // Implement dead behavior
-            break;
-        default:
-            break;
+void UpdateNPC(NPC *npc, NPC npcs[], float deltaTime)
+{
+    Vector2 separation = {0.0f, 0.0f};
+    int neighbors = 0;
+
+    // Calculate separation force from nearby NPCs
+    for (int i = 0; i < npcCount; i++)
+    {
+        if (&npcs[i] != npc) // Ensure we’re not calculating separation against itself
+        {
+            float distance = Vector2Distance(npc->position, npcs[i].position);
+            if (distance < npc->collisionRadius * 2.0f) // Check if within collision radius
+            {
+                Vector2 away = Vector2Subtract(npc->position, npcs[i].position);
+                away = Vector2Scale(Vector2Normalize(away), 1.0f / (distance + 0.01f)); // Weight by inverse distance
+                separation = Vector2Add(separation, away);
+                neighbors++;
+            }
+        }
+    }
+
+    // Apply separation force if there are nearby NPCs
+    if (neighbors > 0)
+    {
+        separation = Vector2Scale(separation, npc->separationForce); // Scale by separation force
+        npc->position = Vector2Add(npc->position, Vector2Scale(separation, deltaTime));
+    }
+    
+    switch (npc->state)
+    {
+    case NPC_IDLE:
+        // Idle behavior (e.g., stand still)
+        break;
+    case NPC_WALKING:
+    {
+        Vector2 direction = Vector2Subtract(npc->targetPosition, npc->position);
+        float distance = Vector2Length(direction);
+
+        if (distance > 1.0f)
+        { // Threshold to stop moving
+            Vector2 directionNormalized = Vector2Scale(direction, 1.0f / distance);
+            Vector2 movement = Vector2Scale(directionNormalized, npc->speed * deltaTime);
+
+            if (Vector2Length(movement) > distance)
+            {
+                npc->position = npc->targetPosition;
+                SetNPCState(npc, NPC_IDLE); // Change to idle when target reached
+            }
+            else
+            {
+                npc->position = Vector2Add(npc->position, movement);
+            }
+
+            UpdateAnimation(&npc->animation); // Update animation while moving
+        }
+        else
+        {
+            SetNPCState(npc, NPC_IDLE); // Change to idle if close enough to stop
+        }
+        break;
+    }
+    case NPC_TALKING:
+        // Implement talking behavior
+        break;
+    case NPC_ATTACKING:
+        // Implement attacking behavior
+        break;
+    case NPC_DEAD:
+        // Implement dead behavior
+        break;
+    default:
+        break;
     }
 }
 
@@ -68,14 +130,18 @@ void UpdateNPC(NPC *npc, float deltaTime) {
  *
  * @param animation Pointer to the Animation to update.
  */
-void UpdateAnimation(Animation *animation) {
-    if (animation->frameCount <= 0) return; // Safety check
+void UpdateAnimation(Animation *animation)
+{
+    if (animation->frameCount <= 0)
+        return; // Safety check
 
     animation->elapsedTime += GetFrameTime();
 
-    if (animation->elapsedTime >= animation->frameTime) {
+    if (animation->elapsedTime >= animation->frameTime)
+    {
         animation->currentFrame++;
-        if (animation->currentFrame >= animation->frameCount) {
+        if (animation->currentFrame >= animation->frameCount)
+        {
             animation->currentFrame = 0;
         }
         animation->elapsedTime = 0.0f;
@@ -87,19 +153,32 @@ void UpdateAnimation(Animation *animation) {
  *
  * @param npc Pointer to the NPC to draw.
  */
-void DrawNPC(NPC *npc) {
+void DrawNPC(NPC *npc)
+{
     // Draw the current frame of the animation at the NPC's position
-    if (npc->animation.frameCount > 0 && npc->animation.texture.id != 0) { // Check if animation is valid
+    if (npc->animation.frameCount > 0 && npc->animation.texture.id != 0)
+    { // Check if animation is valid
         Rectangle frame = npc->animation.frames[npc->animation.currentFrame];
-        DrawTextureRec(npc->animation.texture, frame, npc->position, WHITE);
+        // Center the texture on the NPC's position
+        Vector2 drawPosition = Vector2Subtract(npc->position, (Vector2){frame.width / 2, frame.height / 2});
+        DrawTextureRec(npc->animation.texture, frame, drawPosition, WHITE);
     }
 
+        // Draw collision radius for debugging
+    DrawCircleLines(npc->position.x, npc->position.y, npc->collisionRadius, RED);
+
     // Optionally draw the NPC's name above it
-    if (npc->drawName && npc->animation.name != NULL) {
-        // Calculate text width and height for centering (optional)
+    if (npc->drawName && strlen(npc->animation.name) > 0)
+    {
         int textWidth = MeasureText(npc->animation.name, 10);
-        Vector2 textPosition = { npc->position.x - textWidth / 2, npc->position.y - 25 };
+        Vector2 textPosition = {npc->position.x - textWidth / 2, npc->position.y - 25};
         DrawText(npc->animation.name, textPosition.x, textPosition.y, 10, RAYWHITE);
+    }
+
+    // If selected, draw a smaller selection circle
+    if (npc->isSelected)
+    {
+        DrawCircleLines(npc->position.x, npc->position.y, npc->animation.frameWidth / 3, GREEN);
     }
 }
 
@@ -109,30 +188,100 @@ void DrawNPC(NPC *npc) {
  * @param npc Pointer to the NPC.
  * @param newState The new state to assign to the NPC.
  */
-void SetNPCState(NPC *npc, NPCState newState) {
-    if (npc->state != newState) {
+void SetNPCState(NPC *npc, NPCState newState)
+{
+    if (npc->state != newState)
+    {
         npc->state = newState;
 
-        // Update animation based on the new state
-        if (npc->state == NPC_WALKING) {
-            Animation walkingAnimation = GetAnimation(&manager, "WarriorRed_2");
-            if (walkingAnimation.frameCount > 0) { // Check if animation is valid
-                npc->animation = walkingAnimation;
-                npc->animation.currentFrame = 0;
-                npc->animation.elapsedTime = 0.0f;
-            } else {
-                fprintf(stderr, "Error: Animation 'walking_animation' not found or invalid.\n");
-            }
-        } else if (npc->state == NPC_ATTACKING) {
-            Animation attackingAnimation = GetAnimation(&manager, "WarriorRed_2");
-            if (attackingAnimation.frameCount > 0) { // Check if animation is valid
-                npc->animation = attackingAnimation;
-                npc->animation.currentFrame = 0;
-                npc->animation.elapsedTime = 0.0f;
-            } else {
-                fprintf(stderr, "Error: Animation 'attacking_animation' not found or invalid.\n");
+        // Define the suffix based on the state
+        const char *suffix;
+        switch (npc->state)
+        {
+        case NPC_IDLE:
+            suffix = "_1"; // _1 for idle
+            break;
+        case NPC_WALKING:
+            suffix = "_2"; // _2 for walking
+            break;
+        case NPC_ATTACKING:
+            suffix = "_3"; // _3 for attacking
+            break;
+        default:
+            return;
+        }
+
+        // Create a base name by removing any existing suffix
+        char baseName[64];
+        snprintf(baseName, sizeof(baseName), "%s", npc->unitType);
+
+        // Remove any existing suffix by finding the last underscore and truncating
+        char *underscorePos = strrchr(baseName, '_');
+        if (underscorePos != NULL)
+        {
+            *underscorePos = '\0'; // Truncate at last underscore
+        }
+
+        // Construct the animation name with the new suffix
+        char animationName[64];
+        snprintf(animationName, sizeof(animationName), "%s%s", baseName, suffix);
+
+        // Retrieve and assign the animation
+        Animation animation = GetAnimation(&manager, animationName);
+        if (animation.frameCount > 0)
+        {
+            npc->animation = animation;
+            npc->animation.currentFrame = 0;
+            npc->animation.elapsedTime = 0.0f;
+        }
+        else
+        {
+            fprintf(stderr, "Error: Animation '%s' not found or invalid.\n", animationName);
+        }
+    }
+}
+
+/**
+ * @brief Processes mouse input to handle NPC selection and movement.
+ *
+ * @param npcs Array of NPCs.
+ * @param npcCount Number of NPCs in the array.
+ * @param mousePosition Current mouse position.
+ * @param mousePressed Boolean indicating if the mouse was pressed.
+ */
+void HandleNPCMouseInput(NPC *npcs, int npcCount, Vector2 mousePosition, bool mousePressed)
+{
+    if (mousePressed)
+    {
+        bool clickedOnNPC = false;
+
+        // Iterate in reverse to prioritize topmost NPCs if overlapping
+        for (int i = npcCount - 1; i >= 0; i--)
+        {
+            Animation currentAnimation = npcs[i].animation;
+            float radius = currentAnimation.frameWidth / 2.0f; // Assuming circular NPCs
+
+            if (CheckCollisionPointCircle(mousePosition, npcs[i].position, radius))
+            {
+                // Toggle selection
+                npcs[i].isSelected = !npcs[i].isSelected;
+                clickedOnNPC = true;
+                break; // Remove this if you want multiple selections from overlapping NPCs
             }
         }
-        // Add more states and corresponding animations as needed
+
+        // If clicked on empty space, set target position for selected NPCs
+        if (!clickedOnNPC)
+        {
+            for (int i = 0; i < npcCount; i++)
+            {
+                if (npcs[i].isSelected)
+                {
+                    npcs[i].targetPosition = mousePosition;
+                    // Change state to walking to trigger movement
+                    SetNPCState(&npcs[i], NPC_WALKING);
+                }
+            }
+        }
     }
 }

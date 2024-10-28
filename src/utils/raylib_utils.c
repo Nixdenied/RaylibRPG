@@ -1,5 +1,14 @@
 #include "raylib.h"
+#include "asset_manager.h"
 #include <stdio.h>
+
+void PrintAllSpriteNames(AssetManager *manager) {
+    printf("Sprite Names:\n");
+    for (int i = 0; i < manager->spriteCount; i++) {
+        printf("Sprite %d: %s\n", i + 1, manager->sprites[i].name);
+    }
+}
+
 
 Color GetColorFromHex(const char *hex)
 {

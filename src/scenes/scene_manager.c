@@ -54,8 +54,7 @@ void UpdateCurrentScene(float deltaTime)
 }
 
 void RenderCurrentScene()
-{
-    BeginDrawing();
+{   
     switch (currentScene)
     {
     case SCENE_DEBUG:

@@ -3,24 +3,32 @@
 #include "string.h"
 #include "rlgl.h"
 #include "debug_scene.h"
-#include <stdio.h> // For file operations
+#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include "asset_manager.h"
 #include "tile_placement_data.h"
 #include "npc.h"
 #include "raylib_utils.h"
+#include "buildings.h" // Include the building header
+#include "custom_cursor.h"
+
+#define MAX_BUILDINGS 5
 
 Vector2 squarePosition = {600, 400}; // Initial position of the square
 const float squareSpeed = 200.0f;    // Speed of the square
 Rectangle squareBounds;              // Bounds of the square
+static bool isSelecting = false;   // Whether a selection box is active
+static Vector2 selectionStart;     // Start point of the drag
+static Vector2 selectionEnd;       // End point of the drag
 
-// Assuming you have a maximum number of NPCs
-#define MAX_NPCS 10
 
-// Add these global or scene-specific variables
+
+// Global variables for NPCs and buildings
 NPC npcs[MAX_NPCS];
-int npcCount = 0; // Current number of NPCs
+
+Building buildings[MAX_BUILDINGS];
+int buildingCount = 0; // Current number of buildings
 
 bool CheckCollisionWithTiles(Rectangle square)
 {
@@ -29,18 +37,11 @@ bool CheckCollisionWithTiles(Rectangle square)
         for (int x = 0; x < screenTilesX; x++)
         {
             TileStack *stack = &placedTiles[y][x];
-            // Check collision for each collidable tile in the stack
             for (int i = 0; i < stack->count; i++)
             {
-                if (stack->isCollidable[i]) // Only check collidable tiles
+                if (stack->isCollidable[i])
                 {
-                    // Calculate the tile rectangle
-                    Rectangle tileRect = {
-                        x * tileSize,
-                        y * tileSize,
-                        tileSize,
-                        tileSize};
-
+                    Rectangle tileRect = {x * tileSize, y * tileSize, tileSize, tileSize};
                     if (CheckCollisionRecs(square, tileRect))
                     {
                         return true; // Collision detected
@@ -52,6 +53,58 @@ bool CheckCollisionWithTiles(Rectangle square)
     return false; // No collision
 }
 
+void UpdateDragSelection(NPC *npcs, int npcCount)
+{
+    Vector2 mousePosition = GetMousePosition();
+
+    // Start drag selection on mouse left button press
+    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    {
+        selectionStart = mousePosition;
+        isSelecting = true;
+    }
+
+    // Update the end position of the drag as the mouse moves
+    if (isSelecting)
+    {
+        selectionEnd = mousePosition;
+    }
+
+    // Complete selection on mouse left button release
+    if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON) && isSelecting)
+    {
+        Rectangle selectionBox = {
+            fmin(selectionStart.x, selectionEnd.x),
+            fmin(selectionStart.y, selectionEnd.y),
+            fabs(selectionEnd.x - selectionStart.x),
+            fabs(selectionEnd.y - selectionStart.y)
+        };
+
+        // Check which NPCs are within the selection box
+        for (int i = 0; i < npcCount; i++)
+        {
+            NPC *npc = &npcs[i];
+            Rectangle npcRect = {
+                npc->position.x - npc->animation.frameWidth / 2,
+                npc->position.y - npc->animation.frameHeight / 2,
+                npc->animation.frameWidth,
+                npc->animation.frameHeight
+            };
+
+            if (CheckCollisionRecs(selectionBox, npcRect))
+            {
+                npc->isSelected = true;
+            }
+            else
+            {
+                npc->isSelected = false;
+            }
+        }
+
+        isSelecting = false; // Reset selection box
+    }
+}
+
 void InitTestMapScene()
 {
     InitAssetManager(&manager);
@@ -59,17 +112,27 @@ void InitTestMapScene()
     LoadNewAssets(&manager, "../assets/Tiny Swords (Update 010)/");
     int screenWidth = GetScreenWidth();
     int screenHeight = GetScreenHeight();
+    InitCustomCursor(&manager);
 
     // Initialize map size and screen size
-    InitTileData(256, 256, screenWidth, screenHeight); // Initialize with default map size
-    LoadFirstMapInDirectory("../maps");                // Load a map from your specified directory
+    InitTileData(256, 256, screenWidth, screenHeight);
+    LoadFirstMapInDirectory("../maps");
     PrintAllAnimationNames(&manager);
+    PrintAllSpriteNames(&manager);
 
+    // Initialize an NPC if there is room
     if (npcCount < MAX_NPCS)
     {
-        InitNPC(&npcs[npcCount], (Vector2){300, 300}, 100.0f, "idle_animation");
-        npcs[npcCount].drawName = true; // Optional: Display NPC's name
+        InitNPC(&npcs[npcCount], &manager, (Vector2){300, 300}, 100.0f, "WarriorRed_1");
+        npcs[npcCount].drawName = true;
         npcCount++;
+    }
+
+    // Initialize a building if there is room
+    if (buildingCount < MAX_BUILDINGS)
+    {
+        InitBuilding(&buildings[buildingCount], (Vector2){400, 400}, BUILDING_TYPE_UNIT_PRODUCER, &manager);
+        buildingCount++;
     }
 }
 
@@ -78,53 +141,49 @@ void UpdateTestMapScene(float deltaTime)
     squareBounds = (Rectangle){squarePosition.x, squarePosition.y, 50, 50}; // Update square bounds
 
     UpdateAnimations(&manager, deltaTime);
+    UpdateCustomCursor(npcs, npcCount, buildings, buildingCount);
 
-    Vector2 newPosition = squarePosition; // Store new position for collision checking
+    Vector2 newPosition = squarePosition;
     if (IsKeyDown(KEY_W))
-        newPosition.y -= squareSpeed * deltaTime; // Move up
+        newPosition.y -= squareSpeed * deltaTime;
     if (IsKeyDown(KEY_S))
-        newPosition.y += squareSpeed * deltaTime; // Move down
+        newPosition.y += squareSpeed * deltaTime;
     if (IsKeyDown(KEY_A))
-        newPosition.x -= squareSpeed * deltaTime; // Move left
+        newPosition.x -= squareSpeed * deltaTime;
     if (IsKeyDown(KEY_D))
-        newPosition.x += squareSpeed * deltaTime; // Move right
+        newPosition.x += squareSpeed * deltaTime;
 
     // Check collision before updating position
-    squareBounds = (Rectangle){newPosition.x, newPosition.y, 50, 50};
+    squareBounds = (Rectangle){newPosition.x, newPosition.y, 100, 100};
     if (!CheckCollisionWithTiles(squareBounds))
     {
-        squarePosition = newPosition; // Only update position if no collision
+        squarePosition = newPosition;
     }
+
+    // Handle mouse input for NPC selection and movement
+    Vector2 mousePosition = GetMousePosition();
+    bool mousePressed = IsMouseButtonPressed(MOUSE_LEFT_BUTTON);
+    HandleNPCMouseInput(npcs, npcCount, mousePosition, mousePressed);
 
     // Update NPCs
     for (int i = 0; i < npcCount; i++)
     {
-        UpdateNPC(&npcs[i], deltaTime);
-
-        if (npcs[i].state == NPC_WALKING)
-        {
-            // Move NPC in the current walking direction
-            npcs[i].position.x += npcs[i].speed * deltaTime;
-
-            // Check boundaries to change state to idle
-            if (npcs[i].position.x >= 500) // Right boundary
-            {
-                SetNPCState(&npcs[i], NPC_IDLE);
-                npcs[i].speed = -fabs(npcs[i].speed); // Set speed to negative for moving left
-            }
-            else if (npcs[i].position.x <= 100) // Left boundary
-            {
-                SetNPCState(&npcs[i], NPC_IDLE);
-                npcs[i].speed = fabs(npcs[i].speed); // Set speed to positive for moving right
-            }
-        }
-        else if (npcs[i].state == NPC_IDLE)
-        {
-            // After idling, switch back to walking
-            SetNPCState(&npcs[i], NPC_WALKING);
-        }
+        UpdateNPC(&npcs[i], npcs, deltaTime);
     }
+
+    // Handle building selection
+    // Check building clicks after NPCs for exclusive handling
+    HandleBuildingClick(buildings, buildingCount, npcs, npcCount, mousePosition, mousePressed);
+
+    // Update Buildings
+    for (int i = 0; i < buildingCount; i++)
+    {
+        UpdateBuilding(&buildings[i], npcs, &npcCount, &manager, deltaTime);
+    }
+
+    UpdateDragSelection(npcs, npcCount);
 }
+
 void RenderTestMapScene()
 {
     ClearBackground(GetColorFromHex("#47aaa9"));
@@ -135,82 +194,50 @@ void RenderTestMapScene()
         for (int x = 0; x < screenTilesX; x++)
         {
             TileStack *stack = &placedTiles[y][x];
-
-            // Render the tiles from bottom to top first
-            for (int i = 0; i < stack->count; i++)
-            {
-                int tilemapIndex = stack->tiles[i] / 1000; // Determine which tilemap the tile belongs to
-                int tileIndex = stack->tiles[i] % 1000;    // Get the tile index
-
-                // Only draw the tile from the tilemap if it exists
-                if (tileIndex < manager.tilemap[tilemapIndex].totalTiles)
-                {
-                    // Draw tile from tilemap
-                    DrawTexture(manager.tilemap[tilemapIndex].tiles[tileIndex], x * tileSize, y * tileSize, WHITE);
-                }
-            }
-        }
-    }
-
-    // Draw placed tiles and sprites on the grid
-    for (int y = 0; y < screenTilesY; y++)
-    {
-        for (int x = 0; x < screenTilesX; x++)
-        {
-            TileStack *stack = &placedTiles[y][x];
-
-            // Render the tiles from bottom to top first
-            for (int i = 0; i < stack->count; i++)
-            {
-                int tilemapIndex = stack->tiles[i] / 1000; // Determine which tilemap the tile belongs to
-                int tileIndex = stack->tiles[i] % 1000;    // Get the tile index
-
-                // Only draw the tile from the tilemap if it exists
-                if (tileIndex < manager.tilemap[tilemapIndex].totalTiles)
-                {
-                    // Draw tile from tilemap
-                    DrawTexture(manager.tilemap[tilemapIndex].tiles[tileIndex], x * tileSize, y * tileSize, WHITE);
-                }
-            }
-        }
-    }
-
-    // Now draw all the sprites on top of the tiles
-    for (int y = 0; y < screenTilesY; y++)
-    {
-        for (int x = 0; x < screenTilesX; x++)
-        {
-            TileStack *stack = &placedTiles[y][x];
-
             for (int i = 0; i < stack->count; i++)
             {
                 int tilemapIndex = stack->tiles[i] / 1000;
                 int tileIndex = stack->tiles[i] % 1000;
 
-                // Check if it is a sprite
+                if (tileIndex < manager.tilemap[tilemapIndex].totalTiles)
+                {
+                    DrawTexture(manager.tilemap[tilemapIndex].tiles[tileIndex], x * tileSize, y * tileSize, WHITE);
+                }
+            }
+        }
+    }
+
+    // Draw sprites on top of the tiles
+    for (int y = 0; y < screenTilesY; y++)
+    {
+        for (int x = 0; x < screenTilesX; x++)
+        {
+            TileStack *stack = &placedTiles[y][x];
+            for (int i = 0; i < stack->count; i++)
+            {
+                int tilemapIndex = stack->tiles[i] / 1000;
+                int tileIndex = stack->tiles[i] % 1000;
+
                 if (tileIndex >= manager.tilemap[tilemapIndex].totalTiles)
                 {
-                    // Draw sprite on top of the tile
                     DrawTexture(manager.sprites[tileIndex - manager.tilemap[tilemapIndex].totalTiles].texture, x * tileSize, y * tileSize, WHITE);
                 }
             }
         }
     }
 
-        // Step 3: Draw all animations on top of both tiles and sprites
+    // Draw animations
     for (int y = 0; y < mapTilesY; y++)
     {
         for (int x = 0; x < mapTilesX; x++)
         {
             TileStack *stack = &placedTiles[y][x];
-
             for (int i = 0; i < stack->count; i++)
             {
                 int tilemapIndex = stack->tiles[i] / 1000;
                 int tileIndex = stack->tiles[i] % 1000;
-
-                // Draw only animations
                 int animationIndex = tileIndex - manager.tilemap[tilemapIndex].totalTiles - manager.spriteCount;
+
                 if (animationIndex >= 0 && animationIndex < manager.animationCount)
                 {
                     Animation *anim = &manager.animations[animationIndex];
@@ -227,6 +254,32 @@ void RenderTestMapScene()
         DrawNPC(&npcs[i]);
     }
 
+    // Draw Buildings and selection UI
+    for (int i = 0; i < buildingCount; i++)
+    {
+        DrawBuilding(&buildings[i]);
+        if (buildings[i].isSelected)
+        {
+            RenderUnitSelectionUI(&buildings[i]);
+        }
+    }
+
     // Draw the controllable square
-    DrawRectangle(squarePosition.x, squarePosition.y, 50, 50, BLUE); // A blue square of 50x50
+    DrawRectangle(squarePosition.x, squarePosition.y, 50, 50, BLUE);
+
+        // Draw the selection box if in the middle of a drag
+    if (isSelecting)
+    {
+        Rectangle selectionBox = {
+            fmin(selectionStart.x, selectionEnd.x),
+            fmin(selectionStart.y, selectionEnd.y),
+            fabs(selectionEnd.x - selectionStart.x),
+            fabs(selectionEnd.y - selectionStart.y)
+        };
+
+        DrawRectangleLinesEx(selectionBox, 2, GREEN); // Outline of the selection box
+        DrawRectangle(selectionBox.x, selectionBox.y, selectionBox.width, selectionBox.height, Fade(GREEN, 0.3f)); // Semi-transparent fill
+    }
+
+    DrawCustomCursor();
 }
