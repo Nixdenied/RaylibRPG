@@ -29,6 +29,7 @@ extern int selectedAnimationIndex;
 static Vector2 mousePosition;
 static Camera2D camera;
 static Vector2 prevMousePosition;
+static bool showControls = false;
 bool isTileCollidable = false; // Global collidability state
 
 // Function Declarations
@@ -207,6 +208,11 @@ void UpdateTilePlacementScene(float deltaTime)
         selectedTileIndex = selectedSpriteIndex = -1;
         printf("Selected animation index: %d\n", selectedAnimationIndex);
     }
+    // Toggle controls display with TAB
+    if (IsKeyPressed(KEY_TAB))
+    {
+        showControls = !showControls;
+    }
 }
 
 void RenderTilePlacementScene()
@@ -216,7 +222,7 @@ void RenderTilePlacementScene()
     // Begin camera mode for world rendering
     BeginMode2D(camera);
 
-    // Step 1: Draw all tiles at the bottom layer
+    // Step 1: Draw "Foam" animation at the bottom layer
     for (int y = 0; y < mapTilesY; y++)
     {
         for (int x = 0; x < mapTilesX; x++)
@@ -228,7 +234,31 @@ void RenderTilePlacementScene()
                 int tilemapIndex = stack->tiles[i] / 1000;
                 int tileIndex = stack->tiles[i] % 1000;
 
-                // Draw only tiles from tilemaps
+                int animationIndex = tileIndex - manager.tilemap[tilemapIndex].totalTiles - manager.spriteCount;
+                if (animationIndex >= 0 && animationIndex < manager.animationCount)
+                {
+                    Animation *anim = &manager.animations[animationIndex];
+                    if (strcmp(anim->name, "Foam_1") == 0)
+                    { // Check if the animation is "Foam"
+                        Rectangle currentFrame = anim->frames[anim->currentFrame];
+                        DrawTextureRec(anim->texture, currentFrame, (Vector2){x * tileSize, y * tileSize}, WHITE);
+                    }
+                }
+            }
+        }
+    }
+
+    // Step 2: Draw all tiles on top of "Foam"
+    for (int y = 0; y < mapTilesY; y++)
+    {
+        for (int x = 0; x < mapTilesX; x++)
+        {
+            TileStack *stack = &placedTiles[y][x];
+            for (int i = 0; i < stack->count; i++)
+            {
+                int tilemapIndex = stack->tiles[i] / 1000;
+                int tileIndex = stack->tiles[i] % 1000;
+
                 if (tileIndex < manager.tilemap[tilemapIndex].totalTiles)
                 {
                     DrawTexture(manager.tilemap[tilemapIndex].tiles[tileIndex], x * tileSize, y * tileSize, WHITE);
@@ -237,19 +267,17 @@ void RenderTilePlacementScene()
         }
     }
 
-    // Step 2: Draw all sprites on top of tiles
+    // Step 3: Draw all sprites on top of tiles
     for (int y = 0; y < mapTilesY; y++)
     {
         for (int x = 0; x < mapTilesX; x++)
         {
             TileStack *stack = &placedTiles[y][x];
-
             for (int i = 0; i < stack->count; i++)
             {
                 int tilemapIndex = stack->tiles[i] / 1000;
                 int tileIndex = stack->tiles[i] % 1000;
 
-                // Draw only sprites
                 if (tileIndex >= manager.tilemap[tilemapIndex].totalTiles &&
                     tileIndex < manager.tilemap[tilemapIndex].totalTiles + manager.spriteCount)
                 {
@@ -260,25 +288,26 @@ void RenderTilePlacementScene()
         }
     }
 
-    // Step 3: Draw all animations on top of both tiles and sprites
+    // Step 4: Draw all other animations on top of tiles and sprites
     for (int y = 0; y < mapTilesY; y++)
     {
         for (int x = 0; x < mapTilesX; x++)
         {
             TileStack *stack = &placedTiles[y][x];
-
             for (int i = 0; i < stack->count; i++)
             {
                 int tilemapIndex = stack->tiles[i] / 1000;
                 int tileIndex = stack->tiles[i] % 1000;
 
-                // Draw only animations
                 int animationIndex = tileIndex - manager.tilemap[tilemapIndex].totalTiles - manager.spriteCount;
                 if (animationIndex >= 0 && animationIndex < manager.animationCount)
                 {
                     Animation *anim = &manager.animations[animationIndex];
-                    Rectangle currentFrame = anim->frames[anim->currentFrame];
-                    DrawTextureRec(anim->texture, currentFrame, (Vector2){x * tileSize, y * tileSize}, WHITE);
+                    if (strcmp(anim->name, "Foam_1") != 0)
+                    { // Skip "Foam" in this pass
+                        Rectangle currentFrame = anim->frames[anim->currentFrame];
+                        DrawTextureRec(anim->texture, currentFrame, (Vector2){x * tileSize, y * tileSize}, WHITE);
+                    }
                 }
             }
         }
@@ -316,7 +345,7 @@ void RenderTilePlacementScene()
     {
         Animation *selectedAnim = &manager.animations[selectedAnimationIndex];
         DrawTextureRec(selectedAnim->texture, selectedAnim->frames[selectedAnim->currentFrame],
-                      (Vector2){worldMousePos.x - tileSize / 2, worldMousePos.y - tileSize / 2}, Fade(WHITE, 0.5f)); // Apply transparency
+                       (Vector2){worldMousePos.x - tileSize / 2, worldMousePos.y - tileSize / 2}, Fade(WHITE, 0.5f)); // Apply transparency
     }
 
     // End camera mode
@@ -328,7 +357,7 @@ void RenderTilePlacementScene()
     const int tileColumns = manager.tilemap[selectedTilemapIndex].tileCountX;
     const int tileRows = (manager.tilemap[selectedTilemapIndex].totalTiles + tileColumns - 1) / tileColumns;
 
-    int selectionGridX = 10; // Fixed position on the screen
+    int selectionGridX = 10;  // Fixed position on the screen
     int selectionGridY = 100; // Fixed position on the screen
     DrawRectangle(selectionGridX, selectionGridY, tileColumns * tileSize, tileRows * tileSize, (Color){100, 100, 100, 255});
 
@@ -341,6 +370,41 @@ void RenderTilePlacementScene()
                     selectionGridX + tileX * tileSize,
                     selectionGridY + tileY * tileSize, WHITE);
     }
+
+    if (showControls)
+    {
+        const int padding = 10;
+        const int fontSize = 20;
+        const Color bgColor = (Color){0, 0, 0, 200}; // Semi-transparent background
+        const Color textColor = RAYWHITE;
+
+        // Background box for the controls
+        int boxWidth = 400;
+        int boxHeight = 300;
+        int boxX = GetScreenWidth() - boxWidth - padding;
+        int boxY = padding;
+
+        DrawRectangle(boxX, boxY, boxWidth, boxHeight, bgColor);
+        DrawText("Controls", boxX + padding, boxY + padding, fontSize, textColor);
+
+        // List of controls
+        int lineY = boxY + 2 * padding + fontSize;
+        DrawText("C - Toggle collidability", boxX + padding, lineY, fontSize, textColor);
+        lineY += fontSize + padding;
+        DrawText("Left/Right - Change tile", boxX + padding, lineY, fontSize, textColor);
+        lineY += fontSize + padding;
+        DrawText("Up/Down - Change sprite", boxX + padding, lineY, fontSize, textColor);
+        lineY += fontSize + padding;
+        DrawText("A/S - Change animation", boxX + padding, lineY, fontSize, textColor);
+        lineY += fontSize + padding;
+        DrawText("PAGE_UP/DOWN - Switch tilemap", boxX + padding, lineY, fontSize, textColor);
+        lineY += fontSize + padding;
+        DrawText("TAB - Show/Hide controls", boxX + padding, lineY, fontSize, textColor);
+        lineY += fontSize + padding;
+        DrawText("Left Click - Place tile", boxX + padding, lineY, fontSize, textColor);
+        lineY += fontSize + padding;
+        DrawText("Right Click - Remove tile", boxX + padding, lineY, fontSize, textColor);
+    }               
 
     // Draw Save button
     DrawRectangleRec(saveButton, LIGHTGRAY);

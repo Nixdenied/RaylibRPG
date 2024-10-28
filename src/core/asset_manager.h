@@ -43,17 +43,20 @@ typedef struct Sprite
     bool drawName; // Flag to determine if the name should be drawn
 } Sprite;
 
-typedef struct AssetNode {
-    char name[64];        // Asset name (key)
-    union {
-        Sprite sprite;    // Store either a sprite or animation
+typedef struct AssetNode
+{
+    char name[64]; // Asset name (key)
+    union
+    {
+        Sprite sprite; // Store either a sprite or animation
         Animation animation;
         Tilemap tilemap;
     };
     struct AssetNode *next; // Linked list to handle hash collisions
 } AssetNode;
 
-typedef struct AssetManager {
+typedef struct AssetManager
+{
     AssetNode *hashTable[HASH_TABLE_SIZE]; // Hashmap to store assets
     int spriteCount;
     int animationCount;
