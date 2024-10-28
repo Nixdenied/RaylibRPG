@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <dirent.h>
+#include <sys/stat.h>
+#include <string.h>
 
 // Global Variables
 const int tileSize = 64; // Size of each tile in pixels
@@ -122,6 +124,7 @@ void SaveTilePlacement(const char *filename)
         {
             TileStack *stack = &placedTiles[y][x];
             fwrite(&stack->count, sizeof(int), 1, file);
+
             if (stack->count > 0)
             {
                 fwrite(stack->tiles, sizeof(int), stack->count, file);
@@ -131,7 +134,7 @@ void SaveTilePlacement(const char *filename)
     }
 
     fclose(file);
-    printf("Map saved to %s\n", filename);
+    printf("Map saved to %s successfully.\n", filename);
 }
 
 void LoadTilePlacement(const char *filename)
@@ -147,8 +150,8 @@ void LoadTilePlacement(const char *filename)
     fread(&mapTilesX, sizeof(int), 1, file);
     fread(&mapTilesY, sizeof(int), 1, file);
 
-    // **Important Correction: Call FreeTileData before updating allocatedTilesX/Y**
-    FreeTileData(); // Free old data based on previous allocatedTilesX/Y
+    // Free old data based on previous allocatedTilesX/Y
+    FreeTileData();
 
     // Now set the new allocated sizes
     allocatedTilesX = mapTilesX;
@@ -205,7 +208,13 @@ void LoadTilePlacement(const char *filename)
     }
 
     fclose(file);
-    printf("Map loaded from %s\n", filename);
+    printf("Map loaded from %s successfully.\n", filename);
+}
+
+// Comparator function for sorting file names alphabetically
+int CompareFileNames(const void *a, const void *b)
+{
+    return strcmp(*(const char **)a, *(const char **)b);
 }
 
 void LoadFirstMapInDirectory(const char *directory)
@@ -218,21 +227,44 @@ void LoadFirstMapInDirectory(const char *directory)
     }
 
     struct dirent *entry;
+    struct stat fileStat;
+    char **fileNames = NULL;
+    size_t fileCount = 0;
+
+    // Collect all file names
     while ((entry = readdir(dir)) != NULL)
     {
-        if (entry->d_type == DT_REG) // Regular file
-        {
-            char filePath[256];
-            snprintf(filePath, sizeof(filePath), "%s/%s", directory, entry->d_name);
-            printf("Loading map from: %s\n", filePath);
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            continue;
 
-            LoadTilePlacement(filePath);
-            break; // Load only the first map
+        char filePath[256];
+        snprintf(filePath, sizeof(filePath), "%s/%s", directory, entry->d_name);
+        if (stat(filePath, &fileStat) == 0 && S_ISREG(fileStat.st_mode))
+        {
+            fileNames = realloc(fileNames, sizeof(char *) * (fileCount + 1));
+            fileNames[fileCount] = strdup(filePath); // Store full file path
+            fileCount++;
         }
     }
-
     closedir(dir);
+
+    // Sort file names alphabetically
+    qsort(fileNames, fileCount, sizeof(char *), CompareFileNames);
+
+    // Load the first sorted map file, if any
+    if (fileCount > 0)
+    {
+        LoadTilePlacement(fileNames[0]);
+    }
+
+    // Free file names array
+    for (size_t i = 0; i < fileCount; i++)
+    {
+        free(fileNames[i]);
+    }
+    free(fileNames);
 }
+
 
 void PushTileToStack(TileStack *stack, int tileIndex, bool isCollidable)
 {

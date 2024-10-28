@@ -9,6 +9,7 @@
 #include "asset_manager.h"
 #include "tile_placement_data.h"
 #include "npc.h"
+#include "raylib_utils.h"
 
 Vector2 squarePosition = {600, 400}; // Initial position of the square
 const float squareSpeed = 200.0f;    // Speed of the square
@@ -75,6 +76,8 @@ void UpdateTestMapScene(float deltaTime)
 {
     squareBounds = (Rectangle){squarePosition.x, squarePosition.y, 50, 50}; // Update square bounds
 
+    UpdateAnimations(&manager, deltaTime);
+
     Vector2 newPosition = squarePosition; // Store new position for collision checking
     if (IsKeyDown(KEY_W))
         newPosition.y -= squareSpeed * deltaTime; // Move up
@@ -121,84 +124,108 @@ void UpdateTestMapScene(float deltaTime)
         }
     }
 }
-    void RenderTestMapScene()
+void RenderTestMapScene()
+{
+    ClearBackground(GetColorFromHex("#47aaa9"));
+
+    // Draw placed tiles and sprites on the grid
+    for (int y = 0; y < screenTilesY; y++)
     {
-        ClearBackground(BLACK);
-
-        // Draw placed tiles and sprites on the grid
-        for (int y = 0; y < screenTilesY; y++)
+        for (int x = 0; x < screenTilesX; x++)
         {
-            for (int x = 0; x < screenTilesX; x++)
+            TileStack *stack = &placedTiles[y][x];
+
+            // Render the tiles from bottom to top first
+            for (int i = 0; i < stack->count; i++)
             {
-                TileStack *stack = &placedTiles[y][x];
+                int tilemapIndex = stack->tiles[i] / 1000; // Determine which tilemap the tile belongs to
+                int tileIndex = stack->tiles[i] % 1000;    // Get the tile index
 
-                // Render the tiles from bottom to top first
-                for (int i = 0; i < stack->count; i++)
+                // Only draw the tile from the tilemap if it exists
+                if (tileIndex < manager.tilemap[tilemapIndex].totalTiles)
                 {
-                    int tilemapIndex = stack->tiles[i] / 1000; // Determine which tilemap the tile belongs to
-                    int tileIndex = stack->tiles[i] % 1000;    // Get the tile index
-
-                    // Only draw the tile from the tilemap if it exists
-                    if (tileIndex < manager.tilemap[tilemapIndex].totalTiles)
-                    {
-                        // Draw tile from tilemap
-                        DrawTexture(manager.tilemap[tilemapIndex].tiles[tileIndex], x * tileSize, y * tileSize, WHITE);
-                    }
+                    // Draw tile from tilemap
+                    DrawTexture(manager.tilemap[tilemapIndex].tiles[tileIndex], x * tileSize, y * tileSize, WHITE);
                 }
             }
         }
-
-        // Draw placed tiles and sprites on the grid
-        for (int y = 0; y < screenTilesY; y++)
-        {
-            for (int x = 0; x < screenTilesX; x++)
-            {
-                TileStack *stack = &placedTiles[y][x];
-
-                // Render the tiles from bottom to top first
-                for (int i = 0; i < stack->count; i++)
-                {
-                    int tilemapIndex = stack->tiles[i] / 1000; // Determine which tilemap the tile belongs to
-                    int tileIndex = stack->tiles[i] % 1000;    // Get the tile index
-
-                    // Only draw the tile from the tilemap if it exists
-                    if (tileIndex < manager.tilemap[tilemapIndex].totalTiles)
-                    {
-                        // Draw tile from tilemap
-                        DrawTexture(manager.tilemap[tilemapIndex].tiles[tileIndex], x * tileSize, y * tileSize, WHITE);
-                    }
-                }
-            }
-        }
-
-        // Now draw all the sprites on top of the tiles
-        for (int y = 0; y < screenTilesY; y++)
-        {
-            for (int x = 0; x < screenTilesX; x++)
-            {
-                TileStack *stack = &placedTiles[y][x];
-
-                for (int i = 0; i < stack->count; i++)
-                {
-                    int tilemapIndex = stack->tiles[i] / 1000;
-                    int tileIndex = stack->tiles[i] % 1000;
-
-                    // Check if it is a sprite
-                    if (tileIndex >= manager.tilemap[tilemapIndex].totalTiles)
-                    {
-                        // Draw sprite on top of the tile
-                        DrawTexture(manager.sprites[tileIndex - manager.tilemap[tilemapIndex].totalTiles].texture, x * tileSize, y * tileSize, WHITE);
-                    }
-                }
-            }
-        }
-
-        // Draw NPCs on top of the tiles
-        for (int i = 0; i < npcCount; i++)
-        {
-            DrawNPC(&npcs[i]);
-        }
-
-        // Draw the controllable square
-        DrawRectangle(squarePosition.x, squarePosition.y, 50, 50, BLUE); // A blue square of 50x50
     }
+
+    // Draw placed tiles and sprites on the grid
+    for (int y = 0; y < screenTilesY; y++)
+    {
+        for (int x = 0; x < screenTilesX; x++)
+        {
+            TileStack *stack = &placedTiles[y][x];
+
+            // Render the tiles from bottom to top first
+            for (int i = 0; i < stack->count; i++)
+            {
+                int tilemapIndex = stack->tiles[i] / 1000; // Determine which tilemap the tile belongs to
+                int tileIndex = stack->tiles[i] % 1000;    // Get the tile index
+
+                // Only draw the tile from the tilemap if it exists
+                if (tileIndex < manager.tilemap[tilemapIndex].totalTiles)
+                {
+                    // Draw tile from tilemap
+                    DrawTexture(manager.tilemap[tilemapIndex].tiles[tileIndex], x * tileSize, y * tileSize, WHITE);
+                }
+            }
+        }
+    }
+
+    // Now draw all the sprites on top of the tiles
+    for (int y = 0; y < screenTilesY; y++)
+    {
+        for (int x = 0; x < screenTilesX; x++)
+        {
+            TileStack *stack = &placedTiles[y][x];
+
+            for (int i = 0; i < stack->count; i++)
+            {
+                int tilemapIndex = stack->tiles[i] / 1000;
+                int tileIndex = stack->tiles[i] % 1000;
+
+                // Check if it is a sprite
+                if (tileIndex >= manager.tilemap[tilemapIndex].totalTiles)
+                {
+                    // Draw sprite on top of the tile
+                    DrawTexture(manager.sprites[tileIndex - manager.tilemap[tilemapIndex].totalTiles].texture, x * tileSize, y * tileSize, WHITE);
+                }
+            }
+        }
+    }
+
+        // Step 3: Draw all animations on top of both tiles and sprites
+    for (int y = 0; y < mapTilesY; y++)
+    {
+        for (int x = 0; x < mapTilesX; x++)
+        {
+            TileStack *stack = &placedTiles[y][x];
+
+            for (int i = 0; i < stack->count; i++)
+            {
+                int tilemapIndex = stack->tiles[i] / 1000;
+                int tileIndex = stack->tiles[i] % 1000;
+
+                // Draw only animations
+                int animationIndex = tileIndex - manager.tilemap[tilemapIndex].totalTiles - manager.spriteCount;
+                if (animationIndex >= 0 && animationIndex < manager.animationCount)
+                {
+                    Animation *anim = &manager.animations[animationIndex];
+                    Rectangle currentFrame = anim->frames[anim->currentFrame];
+                    DrawTextureRec(anim->texture, currentFrame, (Vector2){x * tileSize, y * tileSize}, WHITE);
+                }
+            }
+        }
+    }
+
+    // Draw NPCs on top of the tiles
+    for (int i = 0; i < npcCount; i++)
+    {
+        DrawNPC(&npcs[i]);
+    }
+
+    // Draw the controllable square
+    DrawRectangle(squarePosition.x, squarePosition.y, 50, 50, BLUE); // A blue square of 50x50
+}

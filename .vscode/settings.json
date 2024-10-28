@@ -11,6 +11,7 @@
         "stdlib.h": "c",
         "main_menu_scene.h": "c",
         "asset_manager.h": "c",
-        "tile_placement_data.h": "c"
+        "tile_placement_data.h": "c",
+        "raylib_wrapper.h": "c"
     }
 }

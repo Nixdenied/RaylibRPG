@@ -58,9 +58,11 @@ Animation GetAnimation(AssetManager *manager, const char *name)
     return (Animation){0}; // Return a default animation if not found
 }
 
-void PrintAllAnimationNames(AssetManager *manager) {
+void PrintAllAnimationNames(AssetManager *manager)
+{
     printf("Available Animations:\n");
-    for (int i = 0; i < manager->animationCount; i++) {
+    for (int i = 0; i < manager->animationCount; i++)
+    {
         printf(" - %s\n", manager->animations[i].name);
     }
 }
@@ -124,37 +126,39 @@ void InitAssetManager(AssetManager *manager)
     manager->tilemapCount = 0;
 }
 
-// Function to check if a frame is blank (more than 90% transparent pixels)
 bool IsFrameBlank(Texture2D texture, Rectangle frame)
 {
-    // Load pixel data of the entire texture
-    Image image = LoadImageFromTexture(texture); // Load the texture as an image
-    Color *pixels = LoadImageColors(image);      // Get the color data for each pixel
-
-    int transparentPixelCount = 0;
-    int totalPixelCount = frame.width * frame.height;
-
-    // Iterate through the pixels of the frame
-    for (int y = frame.y; y < frame.y + frame.height; y++)
+    // Get image data from texture
+    Image fullImage = LoadImageFromTexture(texture);
+    if (fullImage.format != UNCOMPRESSED_R8G8B8A8)
     {
-        for (int x = frame.x; x < frame.x + frame.width; x++)
-        {
-            Color pixel = pixels[y * texture.width + x];
-            if (pixel.a <= TRANSPARENCY_THRESHOLD * 255)
-            {
-                transparentPixelCount++;
-            }
-        }
+        // Convert image to RGBA8 if not already
+        ImageFormat(&fullImage, UNCOMPRESSED_R8G8B8A8);
     }
 
-    // Free the image and pixel data
-    UnloadImage(image);
-    UnloadImageColors(pixels);
+    // Extract the frame as a sub-image
+    Image frameImage = ImageFromImage(fullImage, frame);
 
-    // If more than MAX_TRANSPARENT_PIXELS percentage of pixels are transparent, return true (frame is blank)
-    float transparentRatio = (float)transparentPixelCount / totalPixelCount;
-    return (transparentRatio >= MAX_TRANSPARENT_PIXELS);
+    // Calculate the average alpha for the frame image
+    Color *pixels = LoadImageColors(frameImage);
+    int totalPixels = frameImage.width * frameImage.height;
+    int totalAlpha = 0;
+
+    for (int i = 0; i < totalPixels; i++)
+    {
+        totalAlpha += pixels[i].a;
+    }
+
+    // Free image data
+    UnloadImageColors(pixels);
+    UnloadImage(frameImage);
+    UnloadImage(fullImage);
+
+    // Determine if the frame is blank based on average alpha
+    float averageAlpha = (float)totalAlpha / totalPixels;
+    return (averageAlpha < 10.0f); // Threshold can be adjusted
 }
+
 
 void LoadSprite(AssetManager *manager, const char *filePath)
 {
@@ -199,7 +203,7 @@ void LoadAnimation(AssetManager *manager, const char *filePath)
     // Loop through each row to create a separate animation
     for (int row = 0; row < rows; row++)
     {
-        if (manager->animationCount >= MAX_ANIMATIONS) 
+        if (manager->animationCount >= MAX_ANIMATIONS)
         {
             printf("Max animations loaded!\n");
             break;
@@ -239,56 +243,87 @@ void LoadAnimation(AssetManager *manager, const char *filePath)
     }
 }
 
+int CompareEntries(const void *a, const void *b)
+{
+    return strcmp(*(const char **)a, *(const char **)b);
+}
+
 void LoadAssetsFromDirectory(AssetManager *manager, const char *directory)
 {
     DIR *dir;
     struct dirent *ent;
+    char **entries = NULL;
+    size_t entryCount = 0;
 
     if ((dir = opendir(directory)) != NULL)
     {
         while ((ent = readdir(dir)) != NULL)
         {
-            // Ignore the current and parent directory entries
-            if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0)
-            {
-                char filePath[256];
-                snprintf(filePath, sizeof(filePath), "%s/%s", directory, ent->d_name);
+            if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
+                continue;
 
-                // Check if the entry is a directory
-                struct stat pathStat;
-                stat(filePath, &pathStat);
-                if (S_ISDIR(pathStat.st_mode))
+            // Skip the "new" folder during the main load
+            if (strcmp(ent->d_name, "new") == 0)
+                continue;
+
+            entries = realloc(entries, sizeof(char *) * (entryCount + 1));
+            entries[entryCount] = malloc(strlen(ent->d_name) + 1);
+            strcpy(entries[entryCount], ent->d_name);
+            entryCount++;
+        }
+        closedir(dir);
+
+        // Sort entries alphabetically to ensure consistent loading order
+        qsort(entries, entryCount, sizeof(char *), CompareEntries);
+
+        for (size_t i = 0; i < entryCount; i++)
+        {
+            char filePath[512];
+            snprintf(filePath, sizeof(filePath), "%s/%s", directory, entries[i]);
+
+            struct stat pathStat;
+            stat(filePath, &pathStat);
+
+            if (S_ISDIR(pathStat.st_mode))
+            {
+                LoadAssetsFromDirectory(manager, filePath); // Recursively load subdirectories
+            }
+            else if (strstr(entries[i], ".png") != NULL)
+            {
+                if (strstr(entries[i], "Tilemap") != NULL)
                 {
-                    // If it's a directory, recursively call this function
-                    LoadAssetsFromDirectory(manager, filePath);
+                    LoadTilemap(filePath, 64);
+                }
+                else if (strstr(entries[i], "_") != NULL)
+                {
+                    LoadAnimation(manager, filePath);
                 }
                 else
                 {
-                    // Load assets based on their file extensions
-                    if (strstr(ent->d_name, ".png") != NULL)
-                    {
-                        // Determine if it's a static sprite or an animation based on filename pattern
-                        if (strstr(ent->d_name, "Tilemap") != NULL)
-                        {
-                            LoadTilemap(filePath, 64);
-                        }
-                        else if (strstr(ent->d_name, "_") != NULL)
-                        {
-                            LoadAnimation(manager, filePath); // Animation files have underscores in their names
-                        }
-                        else
-                        {
-                            LoadSprite(manager, filePath); // Static images do not
-                        }
-                    }
+                    LoadSprite(manager, filePath);
                 }
             }
+            free(entries[i]);
         }
-        closedir(dir);
+        free(entries);
     }
     else
     {
         perror("Could not open assets directory");
+    }
+}
+
+void LoadNewAssets(AssetManager *manager, const char *directory)
+{
+    char newFolderPath[512];
+    snprintf(newFolderPath, sizeof(newFolderPath), "%s/new", directory);
+
+    // Check if the "new" directory exists, and load it if it does
+    DIR *dir = opendir(newFolderPath);
+    if (dir != NULL)
+    {
+        closedir(dir); // Close immediately, as we'll load it separately
+        LoadAssetsFromDirectory(manager, newFolderPath);
     }
 }
 
