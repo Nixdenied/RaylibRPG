@@ -23,14 +23,13 @@ void CustomTraceLog(int logType, const char *text, va_list args)
 
 int main(void)
 {
-
     logFile = fopen("game_log.txt", "w");
     if (logFile == NULL)
     {
         CloseWindow();
     }
     SetTraceLogCallback(CustomTraceLog);
-    SetConfigFlags(FLAG_BORDERLESS_WINDOWED_MODE | FLAG_WINDOW_RESIZABLE);
+    SetConfigFlags(FLAG_BORDERLESS_WINDOWED_MODE | FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
     InitWindow(GetScreenWidth(), GetScreenHeight(), "Change My Name");
     SetExitKey(KEY_DELETE);
     InitSceneManager();

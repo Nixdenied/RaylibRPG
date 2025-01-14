@@ -28,6 +28,7 @@ typedef struct NPC
     bool isCollidable;
     bool drawName;
     bool isSelected;
+        Rectangle boundingBox; // Add this for bounding box
     Animation animation;
     const char *unitType;  // To hold the type, e.g., "Warrior" or "Archer"
     float collisionRadius; // Radius for selection and collision detection

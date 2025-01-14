@@ -18,11 +18,9 @@
 Vector2 squarePosition = {600, 400}; // Initial position of the square
 const float squareSpeed = 200.0f;    // Speed of the square
 Rectangle squareBounds;              // Bounds of the square
-static bool isSelecting = false;   // Whether a selection box is active
-static Vector2 selectionStart;     // Start point of the drag
-static Vector2 selectionEnd;       // End point of the drag
-
-
+static bool isSelecting = false;     // Whether a selection box is active
+static Vector2 selectionStart;       // Start point of the drag
+static Vector2 selectionEnd;         // End point of the drag
 
 // Global variables for NPCs and buildings
 NPC npcs[MAX_NPCS];
@@ -77,30 +75,19 @@ void UpdateDragSelection(NPC *npcs, int npcCount)
             fmin(selectionStart.x, selectionEnd.x),
             fmin(selectionStart.y, selectionEnd.y),
             fabs(selectionEnd.x - selectionStart.x),
-            fabs(selectionEnd.y - selectionStart.y)
-        };
+            fabs(selectionEnd.y - selectionStart.y)};
 
         // Check which NPCs are within the selection box
         for (int i = 0; i < npcCount; i++)
         {
             NPC *npc = &npcs[i];
-            Rectangle npcRect = {
-                npc->position.x - npc->animation.frameWidth / 2,
-                npc->position.y - npc->animation.frameHeight / 2,
-                npc->animation.frameWidth,
-                npc->animation.frameHeight
-            };
+            Rectangle npcBoundingBox = npc->boundingBox;
 
-            if (CheckCollisionRecs(selectionBox, npcRect))
+            if (CheckCollisionRecs(selectionBox, npcBoundingBox))
             {
                 npc->isSelected = true;
             }
-            else
-            {
-                npc->isSelected = false;
-            }
         }
-
         isSelecting = false; // Reset selection box
     }
 }
@@ -160,16 +147,8 @@ void UpdateTestMapScene(float deltaTime)
         squarePosition = newPosition;
     }
 
-    // Handle mouse input for NPC selection and movement
     Vector2 mousePosition = GetMousePosition();
     bool mousePressed = IsMouseButtonPressed(MOUSE_LEFT_BUTTON);
-    HandleNPCMouseInput(npcs, npcCount, mousePosition, mousePressed);
-
-    // Update NPCs
-    for (int i = 0; i < npcCount; i++)
-    {
-        UpdateNPC(&npcs[i], npcs, deltaTime);
-    }
 
     // Handle building selection
     // Check building clicks after NPCs for exclusive handling
@@ -179,6 +158,15 @@ void UpdateTestMapScene(float deltaTime)
     for (int i = 0; i < buildingCount; i++)
     {
         UpdateBuilding(&buildings[i], npcs, &npcCount, &manager, deltaTime);
+    }
+
+    // Handle mouse input for NPC selection and movement
+    HandleNPCMouseInput(npcs, npcCount, mousePosition, mousePressed);
+
+    // Update NPCs
+    for (int i = 0; i < npcCount; i++)
+    {
+        UpdateNPC(&npcs[i], npcs, deltaTime);
     }
 
     UpdateDragSelection(npcs, npcCount);
@@ -267,17 +255,16 @@ void RenderTestMapScene()
     // Draw the controllable square
     DrawRectangle(squarePosition.x, squarePosition.y, 50, 50, BLUE);
 
-        // Draw the selection box if in the middle of a drag
+    // Draw the selection box if in the middle of a drag
     if (isSelecting)
     {
         Rectangle selectionBox = {
             fmin(selectionStart.x, selectionEnd.x),
             fmin(selectionStart.y, selectionEnd.y),
             fabs(selectionEnd.x - selectionStart.x),
-            fabs(selectionEnd.y - selectionStart.y)
-        };
+            fabs(selectionEnd.y - selectionStart.y)};
 
-        DrawRectangleLinesEx(selectionBox, 2, GREEN); // Outline of the selection box
+        DrawRectangleLinesEx(selectionBox, 2, GREEN);                                                              // Outline of the selection box
         DrawRectangle(selectionBox.x, selectionBox.y, selectionBox.width, selectionBox.height, Fade(GREEN, 0.3f)); // Semi-transparent fill
     }
 

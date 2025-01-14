@@ -6,6 +6,7 @@
 #include "asset_manager.h"
 #include <stdio.h>
 #include <math.h>
+#include "debug.h"
 
 int npcCount = 0;
 
@@ -33,8 +34,8 @@ void InitNPC(NPC *npc, AssetManager *manager, Vector2 position, float speed, con
     npc->drawName = false;
     npc->isSelected = false;
 
-    npc->collisionRadius = 30.0f;      // Set collision radius (adjust as necessary)
-    npc->separationForce = 50.0f;      // Set separation force strength (adjust as needed)
+    npc->collisionRadius = 30.0f; // Set collision radius (adjust as necessary)
+    npc->separationForce = 50.0f; // Set separation force strength (adjust as needed)
 
     Animation initialAnimation = GetAnimation(manager, initialAnimationName);
     if (initialAnimation.frameCount > 0)
@@ -42,6 +43,12 @@ void InitNPC(NPC *npc, AssetManager *manager, Vector2 position, float speed, con
         npc->animation = initialAnimation;
         npc->animation.currentFrame = 0;
         npc->animation.elapsedTime = 0.0f;
+        // Initialize bounding box
+        npc->boundingBox = (Rectangle){
+            position.x - initialAnimation.frameWidth / 8,
+            position.y - initialAnimation.frameHeight / 8,
+            initialAnimation.frameWidth / 4,
+            initialAnimation.frameHeight / 4};
     }
     else
     {
@@ -71,13 +78,20 @@ void UpdateNPC(NPC *npc, NPC npcs[], float deltaTime)
         }
     }
 
+    // Update bounding box
+    npc->boundingBox = (Rectangle){
+        npc->position.x - npc->animation.frameWidth / 8,
+        npc->position.y - npc->animation.frameHeight / 8,
+        npc->animation.frameWidth / 4,
+        npc->animation.frameHeight / 4};
+
     // Apply separation force if there are nearby NPCs
     if (neighbors > 0)
     {
         separation = Vector2Scale(separation, npc->separationForce); // Scale by separation force
         npc->position = Vector2Add(npc->position, Vector2Scale(separation, deltaTime));
     }
-    
+
     switch (npc->state)
     {
     case NPC_IDLE:
@@ -155,6 +169,20 @@ void UpdateAnimation(Animation *animation)
  */
 void DrawNPC(NPC *npc)
 {
+    // If selected, draw a smaller selection circle
+    if (npc->isSelected)
+    {
+        for (int offset = 1; offset <= 3; offset++)
+        {
+            DrawEllipseLines(
+                npc->position.x,                                  // Center X
+                npc->position.y + npc->animation.frameHeight / 5, // Center Y (slightly below the NPC)
+                npc->animation.frameWidth / 6 + offset,           // Horizontal radius
+                npc->animation.frameHeight / 12 + offset,         // Vertical radius
+                GREEN                                             // Color
+            );
+        } // Draw 3 ellipses with offset for thicker line
+    }
     // Draw the current frame of the animation at the NPC's position
     if (npc->animation.frameCount > 0 && npc->animation.texture.id != 0)
     { // Check if animation is valid
@@ -164,8 +192,11 @@ void DrawNPC(NPC *npc)
         DrawTextureRec(npc->animation.texture, frame, drawPosition, WHITE);
     }
 
-        // Draw collision radius for debugging
-    DrawCircleLines(npc->position.x, npc->position.y, npc->collisionRadius, RED);
+    // Draw collision radius for debugging
+    if (DEBUG)
+    {
+        DrawCircleLines(npc->position.x, npc->position.y, npc->collisionRadius, RED);
+    }
 
     // Optionally draw the NPC's name above it
     if (npc->drawName && strlen(npc->animation.name) > 0)
@@ -175,10 +206,9 @@ void DrawNPC(NPC *npc)
         DrawText(npc->animation.name, textPosition.x, textPosition.y, 10, RAYWHITE);
     }
 
-    // If selected, draw a smaller selection circle
-    if (npc->isSelected)
+    if (npc->isSelected && DEBUG)
     {
-        DrawCircleLines(npc->position.x, npc->position.y, npc->animation.frameWidth / 3, GREEN);
+        DrawRectangleLinesEx(npc->boundingBox, 2, GREEN); // Draw bounding box
     }
 }
 
@@ -251,22 +281,47 @@ void SetNPCState(NPC *npc, NPCState newState)
  */
 void HandleNPCMouseInput(NPC *npcs, int npcCount, Vector2 mousePosition, bool mousePressed)
 {
-    if (mousePressed)
-    {
-        bool clickedOnNPC = false;
+    bool clickedOnNPC = false;
 
+    if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
+    {
+        // Deselect all NPCs on right-click
+        for (int i = 0; i < npcCount; i++)
+        {
+            npcs[i].isSelected = false;
+        }
+    }
+    else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+    {
+        // Check if Shift is held down
+        bool shiftHeld = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+        
         // Iterate in reverse to prioritize topmost NPCs if overlapping
         for (int i = npcCount - 1; i >= 0; i--)
         {
             Animation currentAnimation = npcs[i].animation;
-            float radius = currentAnimation.frameWidth / 2.0f; // Assuming circular NPCs
+            float radius = currentAnimation.frameWidth / 4; // Assuming circular NPCs
 
-            if (CheckCollisionPointCircle(mousePosition, npcs[i].position, radius))
+            if (CheckCollisionPointRec(mousePosition, npcs[i].boundingBox))
             {
-                // Toggle selection
-                npcs[i].isSelected = !npcs[i].isSelected;
                 clickedOnNPC = true;
-                break; // Remove this if you want multiple selections from overlapping NPCs
+                
+                // If Shift is held, add to selection; otherwise, select just this NPC
+                if (shiftHeld)
+                {
+                    npcs[i].isSelected = true;
+                }
+                else
+                {
+                    // Deselect all others and select only this NPC
+                    for (int j = 0; j < npcCount; j++)
+                    {
+                        if (i != j)
+                            npcs[j].isSelected = false;
+                    }
+                    npcs[i].isSelected = true;
+                }
+                break;
             }
         }
 
