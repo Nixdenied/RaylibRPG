@@ -27,6 +27,20 @@ TileStack **placedTiles = NULL;
 int allocatedTilesX = 0;
 int allocatedTilesY = 0;
 
+#include <stdint.h>
+
+uint32_t htonl(uint32_t hostlong) {
+    return ((hostlong & 0x000000FF) << 24) |
+           ((hostlong & 0x0000FF00) << 8)  |
+           ((hostlong & 0x00FF0000) >> 8)  |
+           ((hostlong & 0xFF000000) >> 24);
+}
+
+uint32_t ntohl(uint32_t netlong) {
+    // Since the operation is symmetric, it's identical to htonl
+    return htonl(netlong);
+}
+
 void InitTileData(int newMapWidth, int newMapHeight, int screenWidth, int screenHeight)
 {
     mapTilesX = newMapWidth;
@@ -105,30 +119,32 @@ void FreeTileData()
     }
 }
 
-void SaveTilePlacement(const char *filename)
-{
+void SaveTilePlacement(const char *filename) {
     FILE *file = fopen(filename, "wb");
-    if (!file)
-    {
+    if (!file) {
         fprintf(stderr, "Failed to open file for saving: %s\n", filename);
         return;
     }
 
-    // Write map dimensions
-    fwrite(&mapTilesX, sizeof(int), 1, file);
-    fwrite(&mapTilesY, sizeof(int), 1, file);
+    // Write metadata
+    int version = 1; // File format version
+    version = htonl(version);
+    fwrite(&version, sizeof(int), 1, file);
 
-    for (int y = 0; y < mapTilesY; y++)
-    {
-        for (int x = 0; x < mapTilesX; x++)
-        {
+    int dimensions[2] = { htonl(mapTilesX), htonl(mapTilesY) };
+    fwrite(dimensions, sizeof(int), 2, file);
+
+    for (int y = 0; y < mapTilesY; y++) {
+        for (int x = 0; x < mapTilesX; x++) {
             TileStack *stack = &placedTiles[y][x];
-            fwrite(&stack->count, sizeof(int), 1, file);
+            int count = htonl(stack->count);
+            fwrite(&count, sizeof(int), 1, file);
 
-            if (stack->count > 0)
-            {
-                fwrite(stack->tiles, sizeof(int), stack->count, file);
-                fwrite(stack->isCollidable, sizeof(bool), stack->count, file); // Save collidability states
+            for (int i = 0; i < stack->count; i++) {
+                int tile = htonl(stack->tiles[i]);
+                bool collidable = stack->isCollidable[i];
+                fwrite(&tile, sizeof(int), 1, file);
+                fwrite(&collidable, sizeof(bool), 1, file);
             }
         }
     }
@@ -137,72 +153,50 @@ void SaveTilePlacement(const char *filename)
     printf("Map saved to %s successfully.\n", filename);
 }
 
-void LoadTilePlacement(const char *filename)
-{
+void LoadTilePlacement(const char *filename) {
     FILE *file = fopen(filename, "rb");
-    if (!file)
-    {
+    if (!file) {
         fprintf(stderr, "Failed to open file for loading: %s\n", filename);
         return;
     }
 
-    // Read map dimensions
-    fread(&mapTilesX, sizeof(int), 1, file);
-    fread(&mapTilesY, sizeof(int), 1, file);
+    int version;
+    fread(&version, sizeof(int), 1, file);
+    version = ntohl(version);
 
-    // Free old data based on previous allocatedTilesX/Y
-    FreeTileData();
-
-    // Now set the new allocated sizes
-    allocatedTilesX = mapTilesX;
-    allocatedTilesY = mapTilesY;
-
-    placedTiles = (TileStack **)malloc(allocatedTilesY * sizeof(TileStack *));
-    if (!placedTiles)
-    {
-        fprintf(stderr, "Failed to allocate memory for placedTiles during loading.\n");
-        exit(EXIT_FAILURE);
+    if (version != 1) {
+        fprintf(stderr, "Unsupported file version: %d\n", version);
+        fclose(file);
+        return;
     }
 
-    for (int y = 0; y < allocatedTilesY; y++)
-    {
-        placedTiles[y] = (TileStack *)malloc(allocatedTilesX * sizeof(TileStack));
-        if (!placedTiles[y])
-        {
-            fprintf(stderr, "Failed to allocate memory for placedTiles[%d] during loading.\n", y);
-            exit(EXIT_FAILURE);
-        }
+    int dimensions[2];
+    fread(dimensions, sizeof(int), 2, file);
+    mapTilesX = ntohl(dimensions[0]);
+    mapTilesY = ntohl(dimensions[1]);
 
-        for (int x = 0; x < allocatedTilesX; x++)
-        {
+    FreeTileData();
+    InitTileData(mapTilesX, mapTilesY, screenTilesX * tileSize, screenTilesY * tileSize);
+
+    for (int y = 0; y < mapTilesY; y++) {
+        for (int x = 0; x < mapTilesX; x++) {
             TileStack *stack = &placedTiles[y][x];
-            fread(&stack->count, sizeof(int), 1, file);
 
-            if (stack->count > 0)
-            {
-                stack->tiles = (int *)malloc(stack->count * sizeof(int));
-                if (!stack->tiles)
-                {
-                    fprintf(stderr, "Failed to allocate memory for tiles in placedTiles[%d][%d].\n", y, x);
-                    exit(EXIT_FAILURE);
+            int count;
+            fread(&count, sizeof(int), 1, file);
+            count = ntohl(count);
+
+            if (count > 0) {
+                stack->tiles = (int *)malloc(count * sizeof(int));
+                stack->isCollidable = (bool *)malloc(count * sizeof(bool));
+                stack->capacity = count;
+                stack->count = count;
+
+                for (int i = 0; i < count; i++) {
+                    fread(&stack->tiles[i], sizeof(int), 1, file);
+                    stack->tiles[i] = ntohl(stack->tiles[i]);
+                    fread(&stack->isCollidable[i], sizeof(bool), 1, file);
                 }
-                fread(stack->tiles, sizeof(int), stack->count, file);
-
-                stack->isCollidable = (bool *)malloc(stack->count * sizeof(bool));
-                if (!stack->isCollidable)
-                {
-                    fprintf(stderr, "Failed to allocate memory for isCollidable in placedTiles[%d][%d].\n", y, x);
-                    exit(EXIT_FAILURE);
-                }
-                fread(stack->isCollidable, sizeof(bool), stack->count, file);
-
-                stack->capacity = stack->count;
-            }
-            else
-            {
-                stack->tiles = NULL;
-                stack->isCollidable = NULL; // Initialize collidable pointer to NULL if no tiles
-                stack->capacity = 0;
             }
         }
     }

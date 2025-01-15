@@ -5,22 +5,46 @@
 #include "buildings.h"
 #include <stdbool.h>
 
+const BuildingConfig buildingConfigs[] = {
+    {"Castle", "CastleConstruction", "CastleBlue", "CastleDestroyed", 200.0f},
+    {"Tower", "TowerConstruction", "TowerBlue", "TowerDestroyed", 150.0f},
+    {"House", "HouseConstruction", "HouseBlue", "HouseDestroyed", 100.0f},
+};
+
+const int buildingConfigCount = sizeof(buildingConfigs) / sizeof(buildingConfigs[0]);
+
+const BuildingConfig *GetBuildingConfig(BuildingType type)
+{
+    if (type >= 0 && type < buildingConfigCount)
+    {
+        return &buildingConfigs[type];
+    }
+    return NULL; // Return NULL if the type is invalid
+}
+
 void InitBuilding(Building *building, Vector2 position, BuildingType type, AssetManager *manager)
 {
+    const BuildingConfig *config = GetBuildingConfig(type);
+    if (config == NULL)
+    {
+        fprintf(stderr, "Error: Invalid building type\n");
+        return;
+    }
+
     building->position = position;
     building->state = BUILDING_STATE_CONSTRUCTION;
     building->type = type;
     building->buildProgress = 0.0f;
-    building->health = 100.0f;
+    building->health = config->maxHealth;
     building->isSelected = false;
     building->unitTypeToSpawn = NULL;
 
-    // Assign sprites based on asset names
-    building->constructionSprite = GetSprite(manager, "CastleConstruction");
-    building->completedSprite = GetSprite(manager, "CastleBlue");
-    building->destroyedSprite = GetSprite(manager, "CastleDestroyed");
+    // Assign sprites based on the configuration
+    building->constructionSprite = GetSprite(manager, config->constructionSpriteName);
+    building->completedSprite = GetSprite(manager, config->completedSpriteName);
+    building->destroyedSprite = GetSprite(manager, config->destroyedSpriteName);
 
-    // Initialize collision box (centered on the building's position)
+    // Initialize collision box
     float width = building->completedSprite.texture.width;
     float height = building->completedSprite.texture.height;
     building->collisionBox = (Rectangle){
@@ -29,6 +53,7 @@ void InitBuilding(Building *building, Vector2 position, BuildingType type, Asset
         width,
         height};
 }
+
 
 void UpdateBuilding(Building *building, NPC *npcs, int *npcCount, AssetManager *manager, float deltaTime)
 {

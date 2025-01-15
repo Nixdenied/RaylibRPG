@@ -12,6 +12,7 @@
 #include "raylib_utils.h"
 #include "buildings.h" // Include the building header
 #include "custom_cursor.h"
+#include "resources.h"
 
 #define MAX_BUILDINGS 5
 
@@ -21,6 +22,7 @@ Rectangle squareBounds;              // Bounds of the square
 static bool isSelecting = false;     // Whether a selection box is active
 static Vector2 selectionStart;       // Start point of the drag
 static Vector2 selectionEnd;         // End point of the drag
+Resources playerResources;
 
 // Global variables for NPCs and buildings
 NPC npcs[MAX_NPCS];
@@ -107,6 +109,12 @@ void InitTestMapScene()
     PrintAllAnimationNames(&manager);
     PrintAllSpriteNames(&manager);
 
+    // Initialize resources
+    InitResources(&playerResources);
+
+    playerResources.wood = 150; // Example values
+    playerResources.gold = 200;
+
     // Initialize an NPC if there is room
     if (npcCount < MAX_NPCS)
     {
@@ -118,7 +126,7 @@ void InitTestMapScene()
     // Initialize a building if there is room
     if (buildingCount < MAX_BUILDINGS)
     {
-        InitBuilding(&buildings[buildingCount], (Vector2){400, 400}, BUILDING_TYPE_UNIT_PRODUCER, &manager);
+        InitBuilding(&buildings[buildingCount], (Vector2){400, 400}, BUILDING_TOWER, &manager);
         buildingCount++;
     }
 }
@@ -251,6 +259,8 @@ void RenderTestMapScene()
             RenderUnitSelectionUI(&buildings[i]);
         }
     }
+
+    DrawResources(&playerResources, GetScreenWidth());
 
     // Draw the controllable square
     DrawRectangle(squarePosition.x, squarePosition.y, 50, 50, BLUE);

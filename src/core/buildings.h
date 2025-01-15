@@ -11,10 +11,22 @@ typedef enum {
     BUILDING_STATE_DESTROYED
 } BuildingState;
 
-// Building types to define the role of each building, e.g., unit production.
-typedef enum {
-    BUILDING_TYPE_UNIT_PRODUCER
+typedef enum BuildingType {
+    BUILDING_CASTLE,
+    BUILDING_TOWER,
+    BUILDING_HOUSE,
+    // Add more types here
+    BUILDING_TYPE_COUNT // This should always be the last entry
 } BuildingType;
+
+
+typedef struct BuildingConfig {
+    const char *typeName;
+    const char *constructionSpriteName;
+    const char *completedSpriteName;
+    const char *destroyedSpriteName;
+    float maxHealth;
+} BuildingConfig;
 
 // Building struct containing position, state, type, and assets needed for display and function.
 typedef struct {

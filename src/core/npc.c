@@ -131,6 +131,9 @@ void UpdateNPC(NPC *npc, NPC npcs[], float deltaTime)
     case NPC_ATTACKING:
         // Implement attacking behavior
         break;
+    case NPC_BUILDING:
+        
+        break;
     case NPC_DEAD:
         // Implement dead behavior
         break;

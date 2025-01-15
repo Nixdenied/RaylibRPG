@@ -13,6 +13,7 @@ typedef enum
     NPC_WALKING,
     NPC_TALKING,
     NPC_ATTACKING,
+    NPC_BUILDING,
     NPC_DEAD
 } NPCState;
 
