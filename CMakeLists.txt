@@ -68,7 +68,7 @@ if(BUILD_FOR_WINDOWS)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${RAYLIB_LIB_DIR_WINDOWS}/raylib/libraylib.a ${WINDOWS_LIBS})
 elseif(BUILD_FOR_LINUX)
     # Link against the Raylib library for Linux
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${RAYLIB_LIB_DIR_LINUX}/libraylib.a m pthread)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${RAYLIB_LIB_DIR_LINUX}/raylib/libraylib.a m pthread)
 endif()
 
 # Set debug flags if in Debug mode

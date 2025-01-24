@@ -13,10 +13,5 @@ cd ${RAYLIB_DIR}/build-linux
 cmake ..
 make
 
-if [ -f "${RAYLIB_DIR}/build-linux/raylib/libraylib.a" ]; then
-    mv ${RAYLIB_DIR}/build-linux/raylib/libraylib.a ${RAYLIB_DIR}/build-linux/libraylib.a
-fi
-
-# Inform the user
-echo "Raylib has been built, and the library has been moved to ${RAYLIB_DIR}/build-linux/libraylib.a"
+echo "Raylib has been built"
 
