@@ -10,7 +10,7 @@
 #include "tile_placement_data.h"
 #include "npc.h"
 #include "raylib_utils.h"
-#include "buildings.h" // Include the building header
+#include "buildings.h"
 #include "custom_cursor.h"
 #include "resources.h"
 
@@ -126,7 +126,7 @@ void InitTestMapScene()
     // Initialize a building if there is room
     if (buildingCount < MAX_BUILDINGS)
     {
-        InitBuilding(&buildings[buildingCount], (Vector2){400, 400}, BUILDING_TOWER, &manager);
+        InitBuilding(&buildings[buildingCount], (Vector2){400, 400}, BUILDING_TOWER, &manager, 0);
         buildingCount++;
     }
 }

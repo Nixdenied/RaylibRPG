@@ -11,6 +11,12 @@ set(CMAKE_C_STANDARD_REQUIRED True)
 option(BUILD_FOR_WINDOWS "Build the project for Windows using MinGW" OFF)
 option(BUILD_FOR_LINUX "Build the project for Linux" ON)
 
+# Set Raylib paths within the project
+set(RAYLIB_DIR ${CMAKE_SOURCE_DIR}/libs/raylib)
+set(RAYLIB_INCLUDE_DIR ${RAYLIB_DIR}/src)
+set(RAYLIB_LIB_DIR_LINUX ${RAYLIB_DIR}/build-linux)
+set(RAYLIB_LIB_DIR_WINDOWS ${RAYLIB_DIR}/build-windows)
+
 # Set Platform-Specific Compiler and Linker Flags
 if(BUILD_FOR_WINDOWS)
     set(CMAKE_SYSTEM_NAME Windows)
@@ -18,8 +24,8 @@ if(BUILD_FOR_WINDOWS)
     set(CMAKE_CXX_COMPILER x86_64-w64-mingw32-g++)
     set(CMAKE_FIND_ROOT_PATH /usr/x86_64-w64-mingw32)
 
-    # Include the raylib headers (for Windows if different)
-    include_directories(/opt/git/RayLibRPG/libs/raylib/src)
+    # Include the raylib headers (for Windows)
+    include_directories(${RAYLIB_INCLUDE_DIR})
 
     # Additional Windows Libraries
     set(WINDOWS_LIBS gdi32 winmm)
@@ -32,11 +38,8 @@ elseif(BUILD_FOR_LINUX)
     set(CMAKE_C_COMPILER gcc)
     set(CMAKE_CXX_COMPILER g++)
 
-    # Include the raylib headers (for Linux if different)
-    include_directories(/opt/git/RayLibRPG/libs/raylib/src)
-
-    # Do not force fully static linking; allow glibc to link dynamically
-    # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static")
+    # Include the raylib headers (for Linux)
+    include_directories(${RAYLIB_INCLUDE_DIR})
 endif()
 
 # Include directories for the project
@@ -62,10 +65,10 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 # Link against Raylib and other dependencies (Static)
 if(BUILD_FOR_WINDOWS)
     # Link against the cross-compiled raylib library for Windows
-    target_link_libraries(${PROJECT_NAME} PRIVATE /opt/git/RayLibRPG/libs/raylib/build-windows/raylib/libraylib.a ${WINDOWS_LIBS})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${RAYLIB_LIB_DIR_WINDOWS}/raylib/libraylib.a ${WINDOWS_LIBS})
 elseif(BUILD_FOR_LINUX)
     # Link against the Raylib library for Linux
-    target_link_libraries(${PROJECT_NAME} PRIVATE /opt/git/RayLibRPG/libs/raylib/build-linux/libraylib.a m pthread)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${RAYLIB_LIB_DIR_LINUX}/libraylib.a m pthread)
 endif()
 
 # Set debug flags if in Debug mode
@@ -73,4 +76,4 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -fsanitize=address")
 
 # Optionally enable optimizations for Release mode
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O2")
-    
+

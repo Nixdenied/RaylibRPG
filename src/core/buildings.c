@@ -5,26 +5,44 @@
 #include "buildings.h"
 #include <stdbool.h>
 
-const BuildingConfig buildingConfigs[] = {
-    {"Castle", "CastleConstruction", "CastleBlue", "CastleDestroyed", 200.0f},
-    {"Tower", "TowerConstruction", "TowerBlue", "TowerDestroyed", 150.0f},
-    {"House", "HouseConstruction", "HouseBlue", "HouseDestroyed", 100.0f},
+#define FACTION_COUNT 3
+#define NUM_BUILDINGS_PER_FACTION 4
+
+const BuildingConfig buildingConfigs[FACTION_COUNT][NUM_BUILDINGS_PER_FACTION] = {
+    // Humans 0
+    {
+        {"Castle", "CastleConstruction", "CastleBlue", "CastleDestroyed", 200.0f, 0},
+        {"Tower", "TowerConstruction", "TowerBlue", "TowerDestroyed", 150.0f, 0},
+        {"House", "HouseConstruction", "HouseBlue", "HouseDestroyed", 100.0f, 0},
+    },
+    // Undead 1
+    {
+        {"Castle", "UndeadCastleConstruction", "UndeadCastleBlue", "UndeadCastleDestroyed", 200.0f, 0},
+        {"Tower", "UndeadTowerConstruction", "UndeadTowerBlue", "UndeadTowerDestroyed", 150.0f, 1},
+        {"House", "UndeadHouseConstruction", "UndeadHouseBlue", "UndeadHouseDestroyed", 100.0f, 0},
+        {"Graveyard", "GraveyardConstruction", "GraveyardInactive", "GraveyardDestroyed", 150.0f, 0},
+    },
+    // Goblins 2
+    {
+        {"House", "GoblinHouse", "GoblinHouse", "GoblinHouseDestroyed", 200.0f, 0},
+        {"Tower", "WoodTowerInConstruction", "WoodTowerBlue", "WoodTowerDestroyed", 150.0f, 1},
+    },
 };
 
 const int buildingConfigCount = sizeof(buildingConfigs) / sizeof(buildingConfigs[0]);
 
-const BuildingConfig *GetBuildingConfig(BuildingType type)
+const BuildingConfig *GetBuildingConfig(BuildingType type, int faction)
 {
     if (type >= 0 && type < buildingConfigCount)
     {
-        return &buildingConfigs[type];
+        return &buildingConfigs[faction][type];
     }
     return NULL; // Return NULL if the type is invalid
 }
 
-void InitBuilding(Building *building, Vector2 position, BuildingType type, AssetManager *manager)
+void InitBuilding(Building *building, Vector2 position, BuildingType type, AssetManager *manager, int faction)
 {
-    const BuildingConfig *config = GetBuildingConfig(type);
+    const BuildingConfig *config = GetBuildingConfig(faction, type);
     if (config == NULL)
     {
         fprintf(stderr, "Error: Invalid building type\n");
@@ -41,7 +59,14 @@ void InitBuilding(Building *building, Vector2 position, BuildingType type, Asset
 
     // Assign sprites based on the configuration
     building->constructionSprite = GetSprite(manager, config->constructionSpriteName);
-    building->completedSprite = GetSprite(manager, config->completedSpriteName);
+    if (config->animation)
+    {
+        building->completedAnimation = GetAnimation(manager, config->completedSpriteName);
+    }
+    else
+    {
+        building->completedSprite = GetSprite(manager, config->completedSpriteName);
+    }
     building->destroyedSprite = GetSprite(manager, config->destroyedSpriteName);
 
     // Initialize collision box
@@ -53,7 +78,6 @@ void InitBuilding(Building *building, Vector2 position, BuildingType type, Asset
         width,
         height};
 }
-
 
 void UpdateBuilding(Building *building, NPC *npcs, int *npcCount, AssetManager *manager, float deltaTime)
 {
@@ -229,6 +253,15 @@ void DrawBuilding(Building *building)
         return;
     }
 
+    // Draw the current frame of the animation at the NPC's position
+    if (building->completedAnimation.frameCount > 0 && building->completedAnimation.texture.id != 0)
+    { // Check if animation is valid
+        Rectangle frame = building->completedAnimation.frames[building->completedAnimation.currentFrame];
+        // Center the texture on the NPC's position
+        Vector2 drawPosition = Vector2Subtract(building->position, (Vector2){frame.width / 2, frame.height / 2});
+        DrawTextureRec(building->completedAnimation.texture, frame, drawPosition, WHITE);
+    }
+
     // Draw a smaller selection circle if the building is selected
     if (building->isSelected)
     {
@@ -238,8 +271,8 @@ void DrawBuilding(Building *building)
         // Draw the ellipse slightly below the building (adjust the Y offset as needed)
         for (int offset = 1; offset <= 3; offset++)
         {
-        DrawEllipseLines(building->position.x, building->position.y + currentSprite.texture.height / 5,
-                         horizontalRadius + offset, verticalRadius + offset, GREEN);
+            DrawEllipseLines(building->position.x, building->position.y + currentSprite.texture.height / 5,
+                             horizontalRadius + offset, verticalRadius + offset, GREEN);
         }
     }
 
